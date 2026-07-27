@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: compagnon-fle
+    runtime: python
+    region: frankfurt
+    plan: starter
+    autoDeployTrigger: off
+    buildCommand: python3 -m py_compile server.py database.py sequence_1.py
+    startCommand: python3 server.py
+    healthCheckPath: /health
+    numInstances: 1
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_PATH
+        value: /var/data/compagnon_fle.sqlite3
+      - key: SECURE_COOKIES
+        value: "true"
+      - key: SESSION_TTL_SECONDS
+        value: "28800"
+    disk:
+      name: compagnon-fle-data
+      mountPath: /var/data
+      sizeGB: 1
