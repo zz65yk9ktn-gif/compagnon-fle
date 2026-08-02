@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlparse
 from database import (
     LEVELS,
     assign_level,
-    authenticate_admin,
+    authenticate_staff,
     authenticate_learner,
     create_learner,
     get_learner,
@@ -49,6 +49,8 @@ LOGIN_WINDOW_SECONDS = 15 * 60
 MAX_LOGIN_FAILURES = 5
 REGISTRATION_WINDOW_SECONDS = 60 * 60
 MAX_REGISTRATIONS_PER_IP = 10
+MAX_POST_BODY_BYTES = int(os.environ.get("MAX_POST_BODY_BYTES", "20000"))
+MAX_ACTIVE_SESSIONS = int(os.environ.get("MAX_ACTIVE_SESSIONS", "2000"))
 PRODUCTION = os.environ.get("APP_ENV", "development").lower() == "production"
 SECURE_COOKIES = os.environ.get(
     "SECURE_COOKIES", "true" if PRODUCTION else "false"
@@ -57,6 +59,17 @@ SECURE_COOKIES = os.environ.get(
 
 def esc(value) -> str:
     return html.escape(str(value), quote=True)
+
+
+def purge_expired_sessions() -> None:
+    now = time.time()
+    expired = [token for token, session in SESSIONS.items() if session.get("expires_at", 0) <= now]
+    for token in expired:
+        SESSIONS.pop(token, None)
+    if len(SESSIONS) > MAX_ACTIVE_SESSIONS:
+        oldest = sorted(SESSIONS.items(), key=lambda item: item[1].get("expires_at", 0))
+        for token, _session in oldest[: len(SESSIONS) - MAX_ACTIVE_SESSIONS]:
+            SESSIONS.pop(token, None)
 
 
 def layout(title: str, content: str) -> str:
@@ -88,6 +101,27 @@ def session_cookie(token: str, *, clear: bool = False) -> str:
     else:
         parts.append(f"Max-Age={SESSION_TTL_SECONDS}")
     return "; ".join(parts)
+
+
+def dashboard_path_for_role(role: str) -> str:
+    return "/espace-apprenant" if role == "learner" else "/administration"
+
+
+def sequence_overview_page(learner, sequence, active_run=None) -> str:
+    level = learner["assigned_level"]
+    total = len(sequence["levels"][level])
+    if active_run:
+        action = f"Reprendre à la question {active_run['current_index'] + 1} sur {active_run['total_questions']}"
+    else:
+        action = f"Commencer les {total} questions"
+    return layout(
+        sequence["title"],
+        f"""<section class="card sequence-overview">
+  <div class="section-heading"><div><p class="eyebrow">Niveau {esc(level)}</p><h1>{esc(sequence['title'])}</h1></div><a href="/espace-apprenant">Retour au tableau de bord</a></div>
+  <p class="introduction">Cette séquence comporte {total} questions. La progression est enregistrée automatiquement.</p>
+  <a class="primary-link" href="/espace-apprenant/{esc(sequence['slug'])}/demarrer">{esc(action)}</a>
+</section>""",
+    )
 
 
 def registration_page(message: str = "", error: bool = False) -> str:
@@ -170,7 +204,7 @@ def learner_space_page(learner) -> str:
     <p class="eyebrow">Séquence {number} · {count} questions</p>
     <h2>{esc(sequence['title'])}</h2>
     <p>Une question à la fois, avec un retour après chaque réponse.</p>
-    <a class="primary-link" href="/espace-apprenant/{sequence['slug']}">Commencer la séquence {number}</a>
+    <a class="primary-link" href="/espace-apprenant/{sequence['slug']}/accueil">Commencer la séquence {number}</a>
   </article>""")
         pilot = '<div class="sequence-grid">' + "".join(sequence_cards) + "</div>"
         content = f"""<p class="level-badge">Niveau {level}</p>
@@ -353,17 +387,25 @@ class AppHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(path).path
         return str(BASE_DIR / parsed.lstrip("/"))
 
+    def send_security_headers(self) -> None:
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "same-origin")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("X-Permitted-Cross-Domain-Policies", "none")
+        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
+        if SECURE_COOKIES:
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
     def send_html(self, document: str, status: int = 200, cookie: str | None = None):
         payload = document.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Referrer-Policy", "same-origin")
-        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_security_headers()
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
         if cookie:
             self.send_header("Set-Cookie", cookie)
         self.end_headers()
@@ -373,19 +415,26 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.send_response(303)
         self.send_header("Location", location)
         self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_security_headers()
         if cookie:
             self.send_header("Set-Cookie", cookie)
         self.end_headers()
 
     def form_data(self) -> dict[str, str]:
-        length = int(self.headers.get("Content-Length", "0"))
-        if length > 20_000:
-            return {}
+        content_type = self.headers.get("Content-Type", "")
+        if not content_type.startswith("application/x-www-form-urlencoded"):
+            raise ValueError("Type de formulaire non autorisé")
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise ValueError("Taille de requête invalide") from exc
+        if length < 0 or length > MAX_POST_BODY_BYTES:
+            raise ValueError("Requête trop volumineuse")
         parsed = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True)
         return {key: values[0] for key, values in parsed.items()}
 
     def current_session(self):
+        purge_expired_sessions()
         jar = cookies.SimpleCookie(self.headers.get("Cookie", ""))
         token = jar.get("session")
         session = SESSIONS.get(token.value) if token else None
@@ -409,7 +458,7 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def current_admin_session(self):
         session = self.current_session()
-        return session if session and session.get("role") == "admin" else None
+        return session if session and session.get("role") in {"admin", "teacher"} else None
 
     def current_learner_session(self):
         session = self.current_session()
@@ -421,6 +470,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             return self.send_html("OK")
         if path == "/":
             return super().do_GET() if (BASE_DIR / "index.html").exists() else self.send_error(404)
+        if path == "/tableau-de-bord":
+            session = self.current_session()
+            return self.redirect(dashboard_path_for_role(session["role"])) if session else self.redirect("/connexion")
         if path == "/inscription":
             return self.send_html(registration_page())
         if path == "/connexion":
@@ -436,13 +488,17 @@ class AppHandler(SimpleHTTPRequestHandler):
             return self.send_html(learner_space_page(learner))
         if path.startswith("/espace-apprenant/sequence-"):
             clean_path = path.rstrip("/")
-            is_result = clean_path.endswith("/resultat")
-            slug = clean_path.split("/")[-2] if is_result else clean_path.split("/")[-1]
+            parts = clean_path.split("/")
+            explicit_action = parts[-1] if parts[-1] in {"accueil", "demarrer", "resultat"} else None
+            action = explicit_action or "accueil"
+            slug = parts[-2] if explicit_action else parts[-1]
             sequence = sequence_by_slug(slug)
+            if sequence and not explicit_action:
+                return self.redirect(f"/espace-apprenant/{sequence['slug']}/accueil")
             if sequence:
                 session = self.current_learner_session()
                 if not session:
-                    message = "Connectez-vous pour voir ce résultat." if is_result else "Connectez-vous pour accéder à cette séquence."
+                    message = "Connectez-vous pour voir ce résultat." if action == "resultat" else "Connectez-vous pour accéder à cette séquence."
                     return self.send_html(learner_login_page(message), 401)
                 learner = get_learner(session["learner_id"])
                 if not learner or not learner["assigned_level"] or not learner_can_access_level(learner["id"], learner["assigned_level"]):
@@ -450,11 +506,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                 level = learner["assigned_level"]
                 if level not in sequence["levels"]:
                     return self.send_error(403, "Cette séquence ne correspond pas à votre niveau")
-                if is_result:
+                if action == "accueil":
+                    active = get_active_exercise_run(learner["id"], sequence["slug"], level)
+                    return self.send_html(sequence_overview_page(learner, sequence, active))
+                if action == "resultat":
                     progress = get_learner_progress(learner["id"])
                     run = progress["latest_run"] if progress else None
                     if not run or run["sequence_slug"] != sequence["slug"] or run["status"] != "completed":
-                        return self.redirect(f"/espace-apprenant/{sequence['slug']}")
+                        return self.redirect(f"/espace-apprenant/{sequence['slug']}/accueil")
                     return self.send_html(result_page(layout, learner, run, sequence))
                 query = parse_qs(urlparse(self.path).query)
                 run = None if query.get("nouvelle") == ["1"] else get_active_exercise_run(learner["id"], sequence["slug"], level)
@@ -511,7 +570,10 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
-        data = self.form_data()
+        try:
+            data = self.form_data()
+        except (UnicodeDecodeError, ValueError) as error:
+            return self.send_error(413 if "volumineuse" in str(error) else 400, str(error))
         if path == "/inscription":
             return self.handle_registration(data)
         if path == "/administration/connexion":
@@ -521,7 +583,8 @@ class AppHandler(SimpleHTTPRequestHandler):
         if path == "/connexion/apprenant":
             return self.handle_learner_login(data)
         if path.startswith("/espace-apprenant/sequence-"):
-            slug = path.rstrip("/").split("/")[-1]
+            parts = path.rstrip("/").split("/")
+            slug = parts[-2] if parts[-1] == "demarrer" else parts[-1]
             sequence = sequence_by_slug(slug)
             if sequence:
                 return self.handle_sequence_submission(data, sequence)
@@ -577,15 +640,16 @@ class AppHandler(SimpleHTTPRequestHandler):
         rate_key = (self.client_identifier(), "admin")
         if self.rate_limited(LOGIN_FAILURES, rate_key, MAX_LOGIN_FAILURES, LOGIN_WINDOW_SECONDS):
             return self.send_html(admin_login_page("Trop de tentatives. Réessayez dans 15 minutes."), 429)
-        admin = authenticate_admin(data.get("login", ""), data.get("password", ""))
-        if not admin:
+        staff = authenticate_staff(data.get("login", ""), data.get("password", ""))
+        if not staff:
             self.record_rate_event(LOGIN_FAILURES, rate_key)
             return self.send_html(admin_login_page("Identifiant ou mot de passe incorrect."), 401)
         LOGIN_FAILURES.pop(rate_key, None)
+        purge_expired_sessions()
         token = secrets.token_urlsafe(32)
         SESSIONS[token] = {
-            "role": "admin",
-            "admin_id": admin["id"],
+            "role": staff["role"],
+            "admin_id": staff["id"],
             "csrf": secrets.token_urlsafe(24),
             "expires_at": time.time() + SESSION_TTL_SECONDS,
         }
@@ -607,6 +671,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 learner_login_page("Identifiant ou mot de passe incorrect."), 401
             )
         LOGIN_FAILURES.pop(rate_key, None)
+        purge_expired_sessions()
         token = secrets.token_urlsafe(32)
         SESSIONS[token] = {
             "role": "learner",

@@ -1,105 +1,65 @@
 from __future__ import annotations
+from collections.abc import Mapping, Sequence
 
-from collections.abc import Mapping
+LEVELS=("A0","A1","A2","B1","B2")
+SUPPORTED_QUESTION_TYPES={"single_choice","multiple_choice","ordering","manual_response"}
+RESULT_THRESHOLDS=((0,29,"too_difficult","Niveau probablement trop difficile"),(30,59,"fragile","Compétences fragiles : nouvelle série au même niveau avec plus d’aide"),(60,79,"partial","Acquisition partielle : nouvelle série au même niveau"),(80,94,"mastered","Niveau globalement maîtrisé : consolidation ou niveau suivant"),(95,100,"excellent","Très bonne maîtrise : réévaluation possible au niveau supérieur"))
 
-
-RESULT_THRESHOLDS = (
-    (0, 29, "too_difficult", "Niveau probablement trop difficile"),
-    (30, 59, "fragile", "Compétences fragiles : nouvelle série au même niveau avec plus d’aide"),
-    (60, 79, "partial", "Acquisition partielle : nouvelle série au même niveau"),
-    (80, 94, "mastered", "Niveau globalement maîtrisé : consolidation ou niveau suivant"),
-    (95, 100, "excellent", "Très bonne maîtrise : réévaluation possible au niveau supérieur"),
-)
-
-
-def normalize_text(value: object) -> str:
-    return " ".join(str(value or "").strip().lower().split())
-
-
-def recommendation_for_percentage(percentage: int) -> dict[str, object]:
-    bounded = max(0, min(100, int(percentage)))
-    for minimum, maximum, code, label in RESULT_THRESHOLDS:
-        if minimum <= bounded <= maximum:
-            return {"code": code, "label": label, "percentage": bounded}
+def normalize_text(value:object)->str:return " ".join(str(value or "").strip().lower().split())
+def recommendation_for_percentage(percentage:int)->dict[str,object]:
+    p=max(0,min(100,int(percentage)))
+    for lo,hi,code,label in RESULT_THRESHOLDS:
+        if lo<=p<=hi:return {"code":code,"label":label,"percentage":p}
     raise ValueError("Pourcentage hors seuils")
-
-
-def evaluate_answer(question: Mapping[str, object], data: Mapping[str, str]):
-    question_type = question["type"]
-    expected = str(question.get("correct_answer", ""))
-
-    if question_type == "manual_response":
-        answer_text = str(data.get("answer_text", "")).strip()
-        if not answer_text:
-            raise ValueError("Une réponse ou une note de réalisation est nécessaire")
-        return {
-            "answer_text": answer_text,
-            "is_correct": None,
-            "score": None,
-            "requires_manual_review": True,
-        }
-
-    if question_type == "multiple_choice":
-        selected = sorted(
-            letter
-            for letter in ("A", "B", "C", "D")
-            if data.get(f"answer_{letter}") == letter
-        )
-        if not selected:
-            raise ValueError("Choisissez au moins une réponse")
-        answer_text = "+".join(selected)
-        is_correct = answer_text == expected
-    elif question_type == "ordering":
-        positions = {}
-        for letter in question.get("choices", {}):
-            value = data.get(f"position_{letter}", "")
-            if not value.isdigit():
-                raise ValueError("Attribuez une position à chaque élément")
-            positions[letter] = int(value)
-        if sorted(positions.values()) != list(range(1, len(positions) + 1)):
-            raise ValueError("Chaque position doit être utilisée une seule fois")
-        answer_text = "-".join(
-            letter for letter, _ in sorted(positions.items(), key=lambda item: item[1])
-        )
-        is_correct = answer_text == expected
+def _keys(q):
+    c=q.get("choices",{})
+    if not isinstance(c,Mapping):raise ValueError("Les choix doivent être un dictionnaire")
+    return [str(k) for k in c]
+def evaluate_answer(q:Mapping[str,object],data:Mapping[str,str])->dict[str,object]:
+    t=str(q.get("type","")); expected=str(q.get("correct_answer",""))
+    if t not in SUPPORTED_QUESTION_TYPES:raise ValueError(f"Type de question non pris en charge : {t or 'vide'}")
+    if t=="manual_response":
+        a=str(data.get("answer_text","")).strip()
+        if not a:raise ValueError("Une réponse ou une note de réalisation est nécessaire")
+        return {"answer_text":a,"is_correct":None,"score":None,"requires_manual_review":True}
+    keys=_keys(q)
+    if t=="multiple_choice":
+        sel=sorted(k for k in keys if data.get(f"answer_{k}")==k)
+        if not sel:raise ValueError("Choisissez au moins une réponse")
+        a="+".join(sel); exp="+".join(sorted(x.strip() for x in expected.replace(",","+").split("+") if x.strip())); ok=a==exp
+    elif t=="ordering":
+        pos={}
+        for k in keys:
+            v=str(data.get(f"position_{k}",""))
+            if not v.isdigit():raise ValueError("Attribuez une position à chaque élément")
+            pos[k]=int(v)
+        if sorted(pos.values())!=list(range(1,len(pos)+1)):raise ValueError("Chaque position doit être utilisée une seule fois")
+        a="-".join(k for k,_ in sorted(pos.items(),key=lambda i:i[1])); ok=normalize_text(a)==normalize_text(expected)
     else:
-        answer_text = str(data.get("answer", "")).strip().upper()
-        if not answer_text:
-            raise ValueError("Choisissez une réponse")
-        is_correct = normalize_text(answer_text) == normalize_text(expected)
-
-    return {
-        "answer_text": answer_text,
-        "is_correct": is_correct,
-        "score": 1.0 if is_correct else 0.0,
-        "requires_manual_review": False,
-    }
-
-
-def validate_question_bank(sequence: Mapping[str, object]) -> None:
-    required = {
-        "id", "sequence", "level", "type", "instruction", "support",
-        "choices", "correct_answer", "feedback_success", "feedback_error",
-        "competency", "difficulty", "help", "source_group",
-    }
-    levels = sequence.get("levels", {})
-    all_ids = []
-    for level in ("A0", "A1", "A2", "B1", "B2"):
-        questions = levels.get(level, [])
-        if len(questions) != 10:
-            raise ValueError(f"Le niveau {level} doit contenir dix questions")
-        expected_ids = [f"S1-{level}-{number:03d}" for number in range(1, 11)]
-        if [question.get("id") for question in questions] != expected_ids:
-            raise ValueError(f"Identifiants invalides pour le niveau {level}")
-        for index, question in enumerate(questions, start=1):
-            missing = required - set(question)
-            if missing:
-                raise ValueError(f"Champs manquants pour {question.get('id')}: {missing}")
-            source = question["source_group"]
-            if index <= 5 and source != "reference_001_005":
-                raise ValueError(f"Source principale invalide pour {question['id']}")
-            if index >= 6 and source != "complement_006_010":
-                raise ValueError(f"Source complémentaire invalide pour {question['id']}")
-            all_ids.append(question["id"])
-    if len(all_ids) != 50 or len(set(all_ids)) != 50:
-        raise ValueError("La banque doit contenir cinquante identifiants uniques")
+        a=str(data.get("answer","")).strip()
+        if not a:raise ValueError("Choisissez une réponse")
+        if a not in keys:raise ValueError("Réponse inconnue pour cette question")
+        ok=normalize_text(a)==normalize_text(expected)
+    return {"answer_text":a,"is_correct":ok,"score":1.0 if ok else 0.0,"requires_manual_review":False}
+def validate_question_bank(sequence:Mapping[str,object])->None:
+    levels=sequence.get("levels",{}); ids=[]; seqno=None
+    if not str(sequence.get("slug","")).strip() or not str(sequence.get("title","")).strip() or not isinstance(levels,Mapping):raise ValueError("Séquence incomplète")
+    required={"id","sequence","level","type","instruction","support","choices","correct_answer","feedback_success","feedback_error","competency","difficulty","help","source_group"}
+    for level in LEVELS:
+        questions=levels.get(level,[])
+        if not isinstance(questions,Sequence) or isinstance(questions,(str,bytes)) or not questions:raise ValueError(f"Banque invalide ou vide pour {level}")
+        for q in questions:
+            if not isinstance(q,Mapping):raise ValueError(f"Question invalide dans {level}")
+            missing=required-set(q)
+            if missing:raise ValueError(f"Champs manquants pour {q.get('id')}: {sorted(missing)}")
+            current=int(q["sequence"]); seqno=current if seqno is None else seqno
+            if current!=seqno or q["level"]!=level:raise ValueError(f"Métadonnées incohérentes pour {q['id']}")
+            if str(q["type"]) not in SUPPORTED_QUESTION_TYPES:raise ValueError(f"Type non pris en charge pour {q['id']}")
+            if not isinstance(q["difficulty"],int) or not 1<=q["difficulty"]<=5:raise ValueError(f"Difficulté invalide pour {q['id']}")
+            keys=_keys(q); expected=str(q["correct_answer"])
+            if q["type"]!="manual_response" and len(keys)<2:raise ValueError(f"Choix insuffisants pour {q['id']}")
+            if q["type"]=="single_choice" and expected not in keys:raise ValueError(f"Bonne réponse absente pour {q['id']}")
+            qid=str(q["id"])
+            if not qid.startswith(f"S{seqno}-{level}-"):raise ValueError(f"Identifiant incohérent pour {qid}")
+            ids.append(qid)
+    if len(ids)!=len(set(ids)):raise ValueError("Identifiants dupliqués")

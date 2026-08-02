@@ -5,8 +5,8 @@ services:
     region: frankfurt
     plan: starter
     autoDeployTrigger: off
-    buildCommand: python3 -m py_compile server.py database.py sequence_1.py
-    startCommand: python3 server.py
+    buildCommand: python3 deployment_check.py
+    startCommand: python3 -u server.py
     healthCheckPath: /health
     numInstances: 1
     envVars:

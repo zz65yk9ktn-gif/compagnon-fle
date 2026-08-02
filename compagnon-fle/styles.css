@@ -618,6 +618,72 @@ footer p {
   margin-top: 24px;
 }
 
+
+/* Tâche 7 — ergonomie mobile et accessibilité des exercices */
+.question-form h2 {
+  margin: 0;
+  font-size: clamp(1.3rem, 4vw, 1.75rem);
+  line-height: 1.3;
+}
+
+.answer-options {
+  grid-template-columns: 1fr;
+}
+
+.choice,
+.order-choice {
+  min-height: 68px;
+  line-height: 1.35;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.choice:hover,
+.choice:focus-within,
+.order-choice:hover,
+.order-choice:focus-within {
+  background: #eef7fb;
+  border-color: #28789d;
+  outline: 3px solid rgb(40 120 157 / 18%);
+  outline-offset: 2px;
+}
+
+.choice:has(input:checked) {
+  background: #e7f4fa;
+  border-color: #165b79;
+  box-shadow: 0 0 0 2px rgb(40 120 157 / 20%);
+}
+
+.choice-direct {
+  width: 100%;
+  min-height: 84px;
+}
+
+.choice-direct:has(input:focus-visible) {
+  outline: 4px solid rgb(40 120 157 / 30%);
+  outline-offset: 3px;
+}
+
+.choice-direct:has(input:checked) .choice-letter {
+  color: #ffffff;
+  background: #165b79;
+}
+
+.question-form > button {
+  width: 100%;
+  min-height: 54px;
+}
+
+.exercise-support p,
+.help-box p {
+  margin-bottom: 0;
+}
+
+[aria-live] {
+  scroll-margin-top: 16px;
+}
+
 @media (max-width: 540px) {
   .site-header {
     width: min(100% - 32px, 1080px);
@@ -671,8 +737,23 @@ footer p {
   }
 
   .choice-direct {
-    min-height: 82px;
-    padding: 18px 16px;
+    min-height: 92px;
+    padding: 18px 14px;
+  }
+
+  .choice-letter {
+    width: 48px;
+    height: 48px;
+    flex-basis: 48px;
+  }
+
+  .question-form {
+    padding: 20px 16px;
+  }
+
+  .progress-label {
+    gap: 12px;
+    font-size: .92rem;
   }
 
   .result-actions {

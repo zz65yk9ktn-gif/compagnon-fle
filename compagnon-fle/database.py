@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -14,6 +15,14 @@ DATABASE_PATH = Path(
 ).expanduser()
 LEVELS = ("A0", "A1", "A2", "B1", "B2")
 PASSWORD_ITERATIONS = 310_000
+SCHEMA_VERSION = 3
+ROLES = ("learner", "teacher", "admin")
+STAFF_ROLES = ("teacher", "admin")
+ROLE_PERMISSIONS = {
+    "learner": frozenset({"access_own_space", "submit_answers"}),
+    "teacher": frozenset({"view_learners", "view_progress", "assign_levels"}),
+    "admin": frozenset({"view_learners", "view_progress", "assign_levels", "manage_users"}),
+}
 
 
 def connect() -> sqlite3.Connection:
@@ -22,6 +31,8 @@ def connect() -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA busy_timeout = 10000")
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.execute("PRAGMA synchronous = NORMAL")
     return connection
 
 
@@ -29,6 +40,18 @@ def initialize_database() -> None:
     with connect() as database:
         database.executescript(
             """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                description TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS app_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 login TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -74,8 +97,12 @@ def initialize_database() -> None:
                 answer_text TEXT NOT NULL,
                 is_correct INTEGER NOT NULL CHECK (is_correct IN (0, 1)),
                 score REAL NULL,
+                run_id INTEGER NULL,
+                requires_manual_review INTEGER NOT NULL DEFAULT 0
+                    CHECK (requires_manual_review IN (0, 1)),
                 attempted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (learner_id) REFERENCES users(id) ON DELETE CASCADE
+                FOREIGN KEY (learner_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (run_id) REFERENCES exercise_runs(id) ON DELETE SET NULL
             );
 
             CREATE TABLE IF NOT EXISTS adaptation_recommendations (
@@ -118,8 +145,53 @@ def initialize_database() -> None:
             CREATE INDEX IF NOT EXISTS idx_attempts_exercise ON exercise_attempts(sequence_slug, exercise_id);
             CREATE INDEX IF NOT EXISTS idx_adaptations_learner ON adaptation_recommendations(learner_id);
             CREATE INDEX IF NOT EXISTS idx_runs_learner ON exercise_runs(learner_id, sequence_slug, status);
+            CREATE INDEX IF NOT EXISTS idx_attempts_run ON exercise_attempts(run_id);
+            CREATE INDEX IF NOT EXISTS idx_runs_completed ON exercise_runs(status, completed_at);
             """
         )
+        user_sql_row = database.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'"
+        ).fetchone()
+        user_sql = user_sql_row["sql"] if user_sql_row else ""
+        user_columns = {row["name"] for row in database.execute("PRAGMA table_info(users)")}
+        needs_user_migration = (
+            "teacher" not in user_sql
+            or "is_active" not in user_columns
+            or "disabled_at" not in user_columns
+        )
+        if needs_user_migration:
+            database.execute("PRAGMA foreign_keys = OFF")
+            database.execute(
+                """
+                CREATE TABLE users_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    login TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                    password_hash TEXT NOT NULL,
+                    role TEXT NOT NULL CHECK (role IN ('learner', 'teacher', 'admin')),
+                    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+                    disabled_at TEXT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            active_expr = "is_active" if "is_active" in user_columns else "1"
+            disabled_expr = "disabled_at" if "disabled_at" in user_columns else "NULL"
+            database.execute(
+                f"""
+                INSERT INTO users_new
+                    (id, login, password_hash, role, is_active, disabled_at, created_at, updated_at)
+                SELECT id, login, password_hash, role, {active_expr}, {disabled_expr},
+                       created_at, updated_at
+                FROM users
+                """
+            )
+            database.execute("DROP TABLE users")
+            database.execute("ALTER TABLE users_new RENAME TO users")
+            database.execute("PRAGMA foreign_keys = ON")
+            database.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
+            database.execute("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active, role)")
+
         profile_columns = {
             row["name"] for row in database.execute("PRAGMA table_info(learner_profiles)")
         }
@@ -153,6 +225,28 @@ def initialize_database() -> None:
             "ON exercise_attempts(run_id, exercise_id) WHERE run_id IS NOT NULL"
         )
         database.execute(
+            "INSERT OR IGNORE INTO schema_migrations(version, description) VALUES (?, ?)",
+            (1, "Schéma initial : utilisateurs, profils, niveaux et exercices"),
+        )
+        database.execute(
+            "INSERT OR IGNORE INTO schema_migrations(version, description) VALUES (?, ?)",
+            (2, "Versionnement, métadonnées et index de robustesse"),
+        )
+        database.execute(
+            "INSERT OR IGNORE INTO schema_migrations(version, description) VALUES (?, ?)",
+            (3, "Rôles administrateur, enseignant et apprenant ; activation des comptes"),
+        )
+        database.execute(
+            """
+            INSERT INTO app_metadata(key, value, updated_at)
+            VALUES ('schema_version', ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value, updated_at = CURRENT_TIMESTAMP
+            """,
+            (str(SCHEMA_VERSION),),
+        )
+
+        database.execute(
             """
             UPDATE learner_profiles
             SET registration_status = 'level_assigned',
@@ -161,6 +255,58 @@ def initialize_database() -> None:
               AND (registration_status != 'level_assigned' OR activity_access_enabled != 1)
             """
         )
+
+
+def database_health_report() -> dict[str, object]:
+    """Return a compact, non-destructive integrity and schema report."""
+    initialize_database()
+    with connect() as database:
+        integrity = database.execute("PRAGMA integrity_check").fetchone()[0]
+        foreign_keys = database.execute("PRAGMA foreign_key_check").fetchall()
+        version_row = database.execute(
+            "SELECT value FROM app_metadata WHERE key = 'schema_version'"
+        ).fetchone()
+        tables = {
+            row["name"]
+            for row in database.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
+        expected_tables = {
+            "schema_migrations", "app_metadata", "users", "learner_profiles",
+            "level_assignments", "exercise_attempts",
+            "adaptation_recommendations", "exercise_runs",
+        }
+        missing_tables = sorted(expected_tables - tables)
+        migrations = [
+            dict(row)
+            for row in database.execute(
+                "SELECT version, applied_at, description FROM schema_migrations ORDER BY version"
+            )
+        ]
+    return {
+        "ok": integrity == "ok" and not foreign_keys and not missing_tables,
+        "integrity_check": integrity,
+        "foreign_key_errors": [tuple(row) for row in foreign_keys],
+        "schema_version": int(version_row["value"]) if version_row else None,
+        "expected_schema_version": SCHEMA_VERSION,
+        "missing_tables": missing_tables,
+        "migrations": migrations,
+    }
+
+
+def backup_database(destination: str | Path) -> Path:
+    """Create a consistent SQLite backup using the native backup API."""
+    initialize_database()
+    target = Path(destination).expanduser().resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with connect() as source, sqlite3.connect(target) as backup:
+        source.backup(backup)
+    return target
+
+
+def database_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def normalize_login(login: str) -> str:
@@ -212,49 +358,109 @@ def create_learner(
         return user_id
 
 
-def create_admin(login: str, password: str) -> int:
+def create_staff_user(*, login: str, password: str, role: str) -> int:
+    if role not in STAFF_ROLES:
+        raise ValueError("Rôle de personnel invalide")
     with connect() as database:
         cursor = database.execute(
-            "INSERT INTO users (login, password_hash, role) VALUES (?, ?, 'admin')",
-            (normalize_login(login), hash_password(password)),
+            "INSERT INTO users (login, password_hash, role) VALUES (?, ?, ?)",
+            (normalize_login(login), hash_password(password), role),
         )
         return int(cursor.lastrowid)
 
 
-def authenticate_admin(login: str, password: str):
+def create_admin(login: str, password: str) -> int:
+    return create_staff_user(login=login, password=password, role="admin")
+
+
+def create_teacher(login: str, password: str) -> int:
+    return create_staff_user(login=login, password=password, role="teacher")
+
+
+def authenticate_user(login: str, password: str, *, allowed_roles=ROLES):
     with connect() as database:
         user = database.execute(
-            "SELECT id, login, password_hash, role FROM users WHERE login = ?",
+            "SELECT id, login, password_hash, role, is_active FROM users WHERE login = ?",
             (normalize_login(login),),
         ).fetchone()
-    if not user or user["role"] != "admin":
+    if not user or not user["is_active"] or user["role"] not in allowed_roles:
         return None
     return user if verify_password(password, user["password_hash"]) else None
+
+
+def authenticate_admin(login: str, password: str):
+    return authenticate_user(login, password, allowed_roles=("admin",))
+
+
+def authenticate_staff(login: str, password: str):
+    return authenticate_user(login, password, allowed_roles=STAFF_ROLES)
+
+
+def authenticate_teacher(login: str, password: str):
+    return authenticate_user(login, password, allowed_roles=("teacher",))
 
 
 def authenticate_learner(login: str, password: str):
-    with connect() as database:
-        user = database.execute(
-            """
-            SELECT
-                users.id,
-                users.login,
-                users.password_hash,
-                users.role,
-                learner_profiles.first_name,
-                learner_profiles.registration_status,
-                learner_profiles.activity_access_enabled,
-                learner_profiles.assigned_level
-            FROM users
-            JOIN learner_profiles ON learner_profiles.user_id = users.id
-            WHERE users.login = ? AND users.role = 'learner'
-            """,
-            (normalize_login(login),),
-        ).fetchone()
+    user = authenticate_user(login, password, allowed_roles=("learner",))
     if not user:
         return None
-    return user if verify_password(password, user["password_hash"]) else None
+    with connect() as database:
+        return database.execute(
+            """
+            SELECT users.id, users.login, users.password_hash, users.role, users.is_active,
+                   learner_profiles.first_name, learner_profiles.registration_status,
+                   learner_profiles.activity_access_enabled, learner_profiles.assigned_level
+            FROM users
+            JOIN learner_profiles ON learner_profiles.user_id = users.id
+            WHERE users.id = ?
+            """,
+            (user["id"],),
+        ).fetchone()
 
+
+def role_has_permission(role: str, permission: str) -> bool:
+    return permission in ROLE_PERMISSIONS.get(role, frozenset())
+
+
+def set_user_active(*, user_id: int, active: bool, actor_id: int) -> bool:
+    with connect() as database:
+        actor = database.execute(
+            "SELECT role, is_active FROM users WHERE id = ?", (actor_id,)
+        ).fetchone()
+        target = database.execute(
+            "SELECT role FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if (
+            not actor
+            or not actor["is_active"]
+            or not role_has_permission(actor["role"], "manage_users")
+            or not target
+            or user_id == actor_id
+        ):
+            return False
+        database.execute(
+            """
+            UPDATE users
+            SET is_active = ?,
+                disabled_at = CASE WHEN ? = 1 THEN NULL ELSE CURRENT_TIMESTAMP END,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (1 if active else 0, 1 if active else 0, user_id),
+        )
+        return True
+
+
+def list_staff_users():
+    with connect() as database:
+        return database.execute(
+            """
+            SELECT id, login, role, is_active, disabled_at, created_at, updated_at
+            FROM users
+            WHERE role IN ('teacher', 'admin')
+            ORDER BY role, login
+            """
+        ).fetchall()
 
 def list_learners():
     with connect() as database:
@@ -625,10 +831,15 @@ def assign_level(*, learner_id: int, level: str, admin_id: int) -> bool:
         learner = database.execute(
             "SELECT user_id FROM learner_profiles WHERE user_id = ?", (learner_id,)
         ).fetchone()
-        admin = database.execute(
-            "SELECT id FROM users WHERE id = ? AND role = 'admin'", (admin_id,)
+        staff = database.execute(
+            "SELECT id, role, is_active FROM users WHERE id = ?", (admin_id,)
         ).fetchone()
-        if not learner or not admin:
+        if (
+            not learner
+            or not staff
+            or not staff["is_active"]
+            or not role_has_permission(staff["role"], "assign_levels")
+        ):
             return False
         database.execute(
             """

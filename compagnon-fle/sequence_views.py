@@ -53,15 +53,15 @@ def _choices(question: Mapping[str, object]) -> str:
 def question_page(layout, learner, csrf_token: str, run, sequence, question, message: str = "") -> str:
     number = run["current_index"] + 1
     progress = round((run["current_index"] / run["total_questions"]) * 100)
-    notice = f'<p class="notice notice-error">{esc(message)}</p>' if message else ""
+    notice = f'<p class="notice notice-error" role="alert" aria-live="assertive">{esc(message)}</p>' if message else ""
     support = str(question.get("support", "")).strip()
     support_block = f'<div class="exercise-support"><strong>Support</strong><p>{esc(support)}</p></div>' if support else ""
     submit_button = "" if question["type"] == "single_choice" else '<button type="submit">Valider ma réponse</button>'
-    path = f'/espace-apprenant/{sequence["slug"]}'
+    path = f'/espace-apprenant/{sequence["slug"]}/demarrer'
     return layout(
         sequence["title"],
         f"""<section class="sequence-section one-question">
-  <div class="section-heading"><div><p class="eyebrow">Niveau {esc(run['level'])}</p><h1>{esc(sequence['title'])}</h1></div><a href="/espace-apprenant">Quitter</a></div>
+  <div class="section-heading"><div><p class="eyebrow">Niveau {esc(run['level'])}</p><h1>{esc(sequence['title'])}</h1></div><a href="/espace-apprenant/{sequence['slug']}/accueil">Retour à la séquence</a></div>
   <div class="progress-label"><span>Question {number} sur {run['total_questions']}</span><span>{progress} %</span></div>
   <div class="progress-bar" aria-label="Progression"><span style="width:{progress}%"></span></div>
   {notice}
@@ -72,7 +72,7 @@ def question_page(layout, learner, csrf_token: str, run, sequence, question, mes
     <p class="exercise-number">Question {number} · {esc(question['competency'])}</p>
     <h2>{esc(question['instruction'])}</h2>
     {support_block}
-    <div class="answer-options">{_choices(question)}</div>
+    <div class="answer-options" role="group" aria-label="Réponses proposées">{_choices(question)}</div>
     <details class="help-box"><summary>As-tu besoin d’aide ?</summary><p>{esc(question['help'])}</p></details>
     {submit_button}
   </form>
@@ -104,7 +104,7 @@ def feedback_page(layout, learner, run, sequence, question, evaluation) -> str:
     button = "Voir mon résultat" if completed else "Question suivante"
     return layout(
         "Retour sur la réponse",
-        f"""<section class="card feedback-screen {css_class}">
+        f"""<section class="card feedback-screen {css_class}" aria-live="polite" tabindex="-1">
   <p class="eyebrow">Question {number} sur {run['total_questions']}</p>
   <h1>{esc(title)}</h1>
   <p class="introduction">{esc(detail)}</p>
@@ -122,7 +122,7 @@ def result_page(layout, learner, run, sequence) -> str:
     base = f'/espace-apprenant/{sequence["slug"]}'
     return layout(
         f"Résultat · {sequence['title']}",
-        f"""<section class="card result-card">
+        f"""<section class="card result-card" aria-live="polite" tabindex="-1">
   <p class="eyebrow">{esc(sequence['title'])} · Niveau {esc(run['level'])}</p>
   <h1>Ma série est terminée</h1>
   <div class="score-circle"><strong>{percentage} %</strong><span>de réussite automatique</span></div>

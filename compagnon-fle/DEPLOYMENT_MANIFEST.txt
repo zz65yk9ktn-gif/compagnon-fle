@@ -1,0 +1,39 @@
+COMPAGNON FLE — PAQUET DE DÉPLOIEMENT — 29 JUILLET 2026
+
+Fichiers actifs :
+- server.py
+- database.py
+- exercise_engine.py
+- sequences.py
+- sequence_1.py
+- sequence_views.py
+- index.html
+- styles.css
+- render.yaml
+- README.md
+- create_admin.py
+- deployment_check.py
+- startup_check.py
+- database_check.py
+- user_management_check.py
+- navigation_check.py
+- exercise_framework_check.py
+- interface_check.py
+
+Fichiers volontairement exclus :
+- sequence_1_views.py (ancienne vue dupliquée)
+- fichiers *.before_*.py et copies historiques
+- bases SQLite locales
+- dossiers __pycache__
+- sauvegardes techniques
+
+Commande Render de build : python3 deployment_check.py
+Commande Render de démarrage : python3 -u server.py
+Route de santé : /health
+Base persistante : /var/data/compagnon_fle.sqlite3
+- remote_smoke_check.py
+- release_integrity_check.py
+- POST_DEPLOYMENT.md
+
+Contrôle de l'archive avant envoi : python3 release_integrity_check.py compagnon-fle-deploy-2026-07-29.zip
+Contrôle de la version distante : python3 remote_smoke_check.py https://ADRESSE-PUBLIQUE-RENDER
