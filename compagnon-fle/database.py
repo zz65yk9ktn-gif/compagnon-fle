@@ -418,6 +418,32 @@ def authenticate_learner(login: str, password: str):
         ).fetchone()
 
 
+
+def reset_learner_password(*, learner_id: int, new_password: str, actor_id: int) -> bool:
+    if len(new_password) < 12 or not any(c.isalpha() for c in new_password) or not any(c.isdigit() for c in new_password):
+        return False
+    with connect() as database:
+        actor = database.execute(
+            "SELECT role, is_active FROM users WHERE id = ?", (actor_id,)
+        ).fetchone()
+        learner = database.execute(
+            "SELECT role, is_active FROM users WHERE id = ?", (learner_id,)
+        ).fetchone()
+        if (
+            not actor
+            or not actor["is_active"]
+            or actor["role"] not in STAFF_ROLES
+            or not learner
+            or not learner["is_active"]
+            or learner["role"] != "learner"
+        ):
+            return False
+        database.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(new_password), learner_id),
+        )
+        return True
+
 def role_has_permission(role: str, permission: str) -> bool:
     return permission in ROLE_PERMISSIONS.get(role, frozenset())
 

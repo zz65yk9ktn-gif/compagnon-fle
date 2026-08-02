@@ -29,6 +29,7 @@ from database import (
     learner_can_access_level,
     list_learners,
     record_exercise_attempt,
+    reset_learner_password,
     start_exercise_run,
 )
 from exercise_engine import evaluate_answer, recommendation_for_percentage, validate_question_bank
@@ -51,6 +52,7 @@ REGISTRATION_WINDOW_SECONDS = 60 * 60
 MAX_REGISTRATIONS_PER_IP = 10
 MAX_POST_BODY_BYTES = int(os.environ.get("MAX_POST_BODY_BYTES", "20000"))
 MAX_ACTIVE_SESSIONS = int(os.environ.get("MAX_ACTIVE_SESSIONS", "2000"))
+COMMON_LEARNER_PASSWORD = os.environ.get("COMMON_LEARNER_PASSWORD", "Compagnon2026")
 PRODUCTION = os.environ.get("APP_ENV", "development").lower() == "production"
 SECURE_COOKIES = os.environ.get(
     "SECURE_COOKIES", "true" if PRODUCTION else "false"
@@ -309,6 +311,11 @@ def learner_detail_page(session: dict, learner, message: str = "", error: bool =
     <input type="hidden" name="return_to" value="detail">
     <label>Niveau attribué<select name="level" required>{''.join(options)}</select></label>
     <button type="submit">Attribuer le niveau et autoriser l’accès</button>
+  </form>
+  <form method="post" action="/administration/mot-de-passe" class="level-form">
+    <input type="hidden" name="csrf_token" value="{esc(session['csrf'])}">
+    <input type="hidden" name="learner_id" value="{learner['id']}">
+    <button type="submit">Réinitialiser au mot de passe commun</button>
   </form>
   <p><a class="primary-link" href="/administration/apprenant/suivi?id={learner['id']}">Consulter le suivi</a></p>
 </section>""",
@@ -580,6 +587,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             return self.handle_admin_login(data)
         if path == "/administration/niveau":
             return self.handle_level_assignment(data)
+        if path == "/administration/mot-de-passe":
+            return self.handle_password_reset(data)
         if path == "/connexion/apprenant":
             return self.handle_learner_login(data)
         if path.startswith("/espace-apprenant/sequence-"):
@@ -659,7 +668,8 @@ class AppHandler(SimpleHTTPRequestHandler):
         )
 
     def handle_learner_login(self, data: dict[str, str]):
-        rate_key = (self.client_identifier(), "learner")
+        normalized_login = data.get("login", "").strip().lower()
+        rate_key = (self.client_identifier(), f"learner:{normalized_login}")
         if self.rate_limited(LOGIN_FAILURES, rate_key, MAX_LOGIN_FAILURES, LOGIN_WINDOW_SECONDS):
             return self.send_html(
                 learner_login_page("Trop de tentatives. Réessayez dans 15 minutes."), 429
@@ -735,6 +745,29 @@ class AppHandler(SimpleHTTPRequestHandler):
         )
         updated_run = get_exercise_run(run_id, learner["id"])
         return self.send_html(feedback_page(layout, learner, updated_run, sequence, question, evaluation))
+
+    def handle_password_reset(self, data: dict[str, str]):
+        session = self.current_admin_session()
+        if not session:
+            return self.send_html(admin_login_page("Votre session a expiré."), 401)
+        if not secrets.compare_digest(data.get("csrf_token", ""), session["csrf"]):
+            return self.send_html(admin_page(session, "Requête non autorisée.", True), 403)
+        try:
+            learner_id = int(data.get("learner_id", ""))
+        except ValueError:
+            return self.send_html(admin_page(session, "Apprenant invalide.", True), 400)
+        if not reset_learner_password(
+            learner_id=learner_id,
+            new_password=COMMON_LEARNER_PASSWORD,
+            actor_id=session["admin_id"],
+        ):
+            return self.send_html(admin_page(session, "Réinitialisation impossible.", True), 400)
+        learner = get_learner(learner_id)
+        return self.send_html(
+            learner_detail_page(
+                session, learner, "Mot de passe réinitialisé au mot de passe commun."
+            )
+        )
 
     def handle_level_assignment(self, data: dict[str, str]):
         session = self.current_admin_session()
