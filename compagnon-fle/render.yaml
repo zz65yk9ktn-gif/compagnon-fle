@@ -4,7 +4,7 @@ services:
     runtime: python
     region: frankfurt
     plan: starter
-    autoDeployTrigger: off
+    autoDeployTrigger: commit
     buildCommand: python3 deployment_check.py
     startCommand: python3 -u server.py
     healthCheckPath: /health
