@@ -28,5 +28,23 @@ question = {
 html = module._choices(question)
 assert html.count('choice-direct') == 4
 assert html.count('type="radio"') == 4
+assert 'onchange=' not in html
 assert all(f'choice-letter">{letter}<' in html for letter in 'ABCD')
+
+page = module.question_page(
+    lambda _title, body: body,
+    {},
+    'csrf-token',
+    {'id': 1, 'current_index': 0, 'total_questions': 1, 'level': 'A0'},
+    {'slug': 'sequence-1', 'title': 'Séquence 1'},
+    {
+        **question,
+        'id': 'S1-A0-001',
+        'competency': 'Test',
+        'instruction': 'Choisir',
+        'support': '',
+        'help': 'Aide',
+    },
+)
+assert '<button type="submit">Valider ma réponse</button>' in page
 print('INTERFACE_CHECK_OK')
