@@ -45,7 +45,7 @@ def _choices(question: Mapping[str, object]) -> str:
     if question_type == "manual_response":
         return '<label>Ma réponse<textarea name="answer_text" rows="4" required></textarea></label><p class="manual-note">Cette production sera conservée pour être examinée par l’enseignant.</p>'
     return "".join(
-        f'<label class="choice choice-direct"><input type="radio" name="answer" value="{esc(original_key)}" required onchange="this.form.requestSubmit()"><span class="choice-letter">{esc(visible_letter)}</span><span class="choice-text">{esc(text)}</span></label>'
+        f'<label class="choice choice-direct"><input type="radio" name="answer" value="{esc(original_key)}" required><span class="choice-letter">{esc(visible_letter)}</span><span class="choice-text">{esc(text)}</span></label>'
         for visible_letter, original_key, text in _shuffled_choices(question)
     )
 
@@ -56,7 +56,7 @@ def question_page(layout, learner, csrf_token: str, run, sequence, question, mes
     notice = f'<p class="notice notice-error" role="alert" aria-live="assertive">{esc(message)}</p>' if message else ""
     support = str(question.get("support", "")).strip()
     support_block = f'<div class="exercise-support"><strong>Support</strong><p>{esc(support)}</p></div>' if support else ""
-    submit_button = "" if question["type"] == "single_choice" else '<button type="submit">Valider ma réponse</button>'
+    submit_button = '<button type="submit">Valider ma réponse</button>'
     path = f'/espace-apprenant/{sequence["slug"]}/demarrer'
     return layout(
         sequence["title"],
