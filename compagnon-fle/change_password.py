@@ -1,45 +1,39 @@
 #!/usr/bin/env python3
 
 import getpass
-import sqlite3
+import os
+from pathlib import Path
 
-from database import connect, hash_password, initialize_database, normalize_login, verify_password
+from database import (
+    authenticate_admin,
+    backup_database,
+    database_health_report,
+    database_timestamp,
+    initialize_database,
+    reset_admin_password,
+)
 
 
 def main() -> None:
     initialize_database()
-    login = normalize_login(input("Identifiant du compte : "))
-    current_password = getpass.getpass("Mot de passe actuel : ")
-    with connect() as database:
-        user = database.execute(
-            "SELECT id, password_hash FROM users WHERE login = ?", (login,)
-        ).fetchone()
-        if not user or not verify_password(current_password, user["password_hash"]):
-            raise SystemExit("Identifiant ou mot de passe actuel incorrect.")
-        new_password = getpass.getpass("Nouveau mot de passe (14 caractères minimum) : ")
+    login = os.environ.get("ADMIN_LOGIN") or input("Identifiant administrateur : ").strip()
+    new_password = os.environ.get("ADMIN_NEW_PASSWORD") or getpass.getpass(
+        "Nouveau mot de passe (14 caractères minimum) : "
+    )
+    if "ADMIN_NEW_PASSWORD" not in os.environ:
         confirmation = getpass.getpass("Confirmez le nouveau mot de passe : ")
         if new_password != confirmation:
             raise SystemExit("Les mots de passe ne correspondent pas.")
-        if (
-            len(new_password) < 14
-            or not any(character.isalpha() for character in new_password)
-            or not any(character.isdigit() for character in new_password)
-        ):
-            raise SystemExit(
-                "Le nouveau mot de passe doit contenir au moins 14 caractères, avec des lettres et des chiffres."
-            )
-        try:
-            database.execute(
-                """
-                UPDATE users
-                SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (hash_password(new_password), user["id"]),
-            )
-        except sqlite3.DatabaseError as error:
-            raise SystemExit(f"Modification impossible : {error}") from error
-    print("Mot de passe modifié.")
+
+    backup_dir = Path(os.environ.get("ADMIN_BACKUP_DIR", "backups/admin-password-reset"))
+    backup_path = backup_database(backup_dir / f"compagnon_fle-{database_timestamp()}.sqlite3")
+    if not reset_admin_password(login=login, new_password=new_password):
+        raise SystemExit("Réinitialisation refusée : administrateur actif introuvable ou mot de passe insuffisant.")
+    if not authenticate_admin(login, new_password):
+        raise SystemExit("Échec de vérification après réinitialisation. Restaurer la sauvegarde.")
+    if not database_health_report()["ok"]:
+        raise SystemExit("La base ne passe plus le contrôle d’intégrité. Restaurer la sauvegarde.")
+    print(f"Mot de passe administrateur réinitialisé. Sauvegarde : {backup_path}")
 
 
 if __name__ == "__main__":
