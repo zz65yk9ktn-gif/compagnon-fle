@@ -392,6 +392,32 @@ def authenticate_admin(login: str, password: str):
     return authenticate_user(login, password, allowed_roles=("admin",))
 
 
+def reset_admin_password(*, login: str, new_password: str) -> bool:
+    """Change only the password hash of one active administrator account."""
+    if (
+        len(new_password) < 14
+        or not any(character.isalpha() for character in new_password)
+        or not any(character.isdigit() for character in new_password)
+    ):
+        return False
+    with connect() as database:
+        admin = database.execute(
+            "SELECT id FROM users WHERE login = ? AND role = 'admin' AND is_active = 1",
+            (normalize_login(login),),
+        ).fetchone()
+        if not admin:
+            return False
+        cursor = database.execute(
+            """
+            UPDATE users
+            SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND role = 'admin'
+            """,
+            (hash_password(new_password), admin["id"]),
+        )
+        return cursor.rowcount == 1
+
+
 def authenticate_staff(login: str, password: str):
     return authenticate_user(login, password, allowed_roles=STAFF_ROLES)
 
