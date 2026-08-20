@@ -10,6 +10,7 @@ CHECKS = [
     "startup_check.py",
     "database_check.py",
     "user_management_check.py",
+    "admin_password_reset_check.py",
     "exercise_framework_check.py",
     "interface_check.py",
     "navigation_check.py",
