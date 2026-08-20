@@ -16,6 +16,23 @@ Ce contrôle vérifie les fichiers indispensables, la compilation, les imports, 
 python3 create_admin.py
 ```
 
+## Réinitialiser le mot de passe administrateur
+
+Exécuter la commande sur l’hôte qui possède la base persistante. Le script crée
+d’abord une sauvegarde SQLite cohérente, ne cible qu’un compte actif de rôle
+`admin`, puis contrôle la nouvelle connexion et l’intégrité de la base.
+
+```sh
+ADMIN_LOGIN='identifiant-admin' python3 change_password.py
+```
+
+Le mot de passe est demandé sans être affiché. Pour une exécution automatisée,
+`ADMIN_NEW_PASSWORD` est accepté temporairement dans l’environnement ; ne jamais
+l’inscrire dans Git, dans `render.yaml` ou dans une ligne de commande conservée.
+
+La sauvegarde est placée par défaut dans `backups/admin-password-reset/`. Définir
+`ADMIN_BACKUP_DIR` pour utiliser un emplacement chiffré hors du dépôt.
+
 ## Lancer en local
 
 ```sh
