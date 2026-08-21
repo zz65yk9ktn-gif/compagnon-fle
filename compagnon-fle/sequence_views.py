@@ -100,7 +100,7 @@ def feedback_page(layout, learner, run, sequence, question, evaluation) -> str:
         css_class = "feedback-review"
     completed = run["status"] == "completed"
     base = f'/espace-apprenant/{sequence["slug"]}'
-    target = f"{base}/resultat" if completed else base
+    target = f"{base}/resultat" if completed else f"{base}/demarrer"
     button = "Voir mon résultat" if completed else "Question suivante"
     return layout(
         "Retour sur la réponse",
@@ -130,7 +130,7 @@ def result_page(layout, learner, run, sequence) -> str:
   <p>{run['manual_review_count']} production(s) à examiner par l’enseignant.{esc(provisional)}</p>
   <div class="recommendation"><strong>Recommandation pédagogique</strong><p>{esc(recommendation['label'])}</p></div>
   <p>Le niveau officiel reste <strong>{esc(run['level'])}</strong>. Seul l’administrateur peut le modifier.</p>
-  <div class="result-actions"><a class="primary-link" href="{base}?nouvelle=1">Commencer une nouvelle série</a><a href="/espace-apprenant">Retour à mon espace</a></div>
+  <div class="result-actions"><a class="primary-link" href="{base}/demarrer?nouvelle=1">Commencer une nouvelle série</a><a href="/espace-apprenant">Retour à mon espace</a></div>
 </section>""",
     )
 

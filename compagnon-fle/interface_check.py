@@ -51,4 +51,22 @@ page = module.question_page(
     },
 )
 assert '<button type="submit">Valider ma réponse</button>' in page
+
+feedback = module.feedback_page(
+    lambda _title, body: body,
+    {},
+    {'current_index': 1, 'total_questions': 5, 'status': 'in_progress'},
+    {'slug': 'sequence-6', 'title': 'Séquence 6'},
+    {'feedback_success': 'Bravo', 'feedback_error': 'Erreur', 'correct_answer': 'A', 'choices': {'A': 'Oui'}},
+    {'requires_manual_review': False, 'is_correct': True},
+)
+assert 'href="/espace-apprenant/sequence-6/demarrer">Question suivante</a>' in feedback
+
+result = module.result_page(
+    lambda _title, body: body,
+    {},
+    {'level': 'A0', 'evaluated_count': 5, 'success_count': 5, 'score_percentage': 100, 'manual_review_count': 0},
+    {'slug': 'sequence-6', 'title': 'Séquence 6'},
+)
+assert 'href="/espace-apprenant/sequence-6/demarrer?nouvelle=1">Commencer une nouvelle série</a>' in result
 print('INTERFACE_CHECK_OK')
