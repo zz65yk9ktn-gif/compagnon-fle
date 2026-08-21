@@ -267,8 +267,8 @@ def learner_space_page(learner) -> str:
         or not learner["activity_access_enabled"]
         or not learner["assigned_level"]
     ):
-        content = """<p class="notice notice-waiting">Votre inscription est enregistrée. Votre niveau doit encore être attribué par un administrateur.</p>"""
-        title = "Niveau en attente"
+        content = """<p class="notice notice-waiting">Tes exercices ne sont pas encore prêts. Demande à ton enseignant.</p>"""
+        title = "Exercices en préparation"
     else:
         level = esc(learner["assigned_level"])
         sequence_cards = []
