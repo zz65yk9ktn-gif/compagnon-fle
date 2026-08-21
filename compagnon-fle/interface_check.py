@@ -50,7 +50,8 @@ page = module.question_page(
         'help': 'Aide',
     },
 )
-assert '<button type="submit">Valider ma réponse</button>' in page
+assert '<button type="submit">Valider</button>' in page
+assert '<summary>Aide</summary>' in page
 
 feedback = module.feedback_page(
     lambda _title, body: body,
@@ -60,7 +61,7 @@ feedback = module.feedback_page(
     {'feedback_success': 'Bravo', 'feedback_error': 'Erreur', 'correct_answer': 'A', 'choices': {'A': 'Oui'}},
     {'requires_manual_review': False, 'is_correct': True},
 )
-assert 'href="/espace-apprenant/sequence-6/demarrer">Question suivante</a>' in feedback
+assert 'href="/espace-apprenant/sequence-6/demarrer">Suivant</a>' in feedback
 
 result = module.result_page(
     lambda _title, body: body,

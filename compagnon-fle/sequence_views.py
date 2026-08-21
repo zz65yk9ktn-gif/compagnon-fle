@@ -56,7 +56,7 @@ def question_page(layout, learner, csrf_token: str, run, sequence, question, mes
     notice = f'<p class="notice notice-error" role="alert" aria-live="assertive">{esc(message)}</p>' if message else ""
     support = str(question.get("support", "")).strip()
     support_block = f'<div class="exercise-support"><strong>Support</strong><p>{esc(support)}</p></div>' if support else ""
-    submit_button = '<button type="submit">Valider ma réponse</button>'
+    submit_button = '<button type="submit">Valider</button>'
     path = f'/espace-apprenant/{sequence["slug"]}/demarrer'
     return layout(
         sequence["title"],
@@ -73,7 +73,7 @@ def question_page(layout, learner, csrf_token: str, run, sequence, question, mes
     <h2>{esc(question['instruction'])}</h2>
     {support_block}
     <div class="answer-options" role="group" aria-label="Réponses proposées">{_choices(question)}</div>
-    <details class="help-box"><summary>As-tu besoin d’aide ?</summary><p>{esc(question['help'])}</p></details>
+    <details class="help-box"><summary>Aide</summary><p>{esc(question['help'])}</p></details>
     {submit_button}
   </form>
 </section>""",
@@ -101,7 +101,7 @@ def feedback_page(layout, learner, run, sequence, question, evaluation) -> str:
     completed = run["status"] == "completed"
     base = f'/espace-apprenant/{sequence["slug"]}'
     target = f"{base}/resultat" if completed else f"{base}/demarrer"
-    button = "Voir mon résultat" if completed else "Question suivante"
+    button = "Voir mon résultat" if completed else "Suivant"
     return layout(
         "Retour sur la réponse",
         f"""<section class="card feedback-screen {css_class}" aria-live="polite" tabindex="-1">
