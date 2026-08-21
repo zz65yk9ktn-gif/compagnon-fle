@@ -15,6 +15,7 @@ DATABASE_PATH = Path(
 ).expanduser()
 LEVELS = ("A0", "A1", "A2", "B1", "B2")
 PASSWORD_ITERATIONS = 310_000
+MAX_PASSWORD_LENGTH = 256
 SCHEMA_VERSION = 4
 ROLES = ("learner", "teacher", "admin")
 STAFF_ROLES = ("teacher", "admin")
@@ -344,6 +345,8 @@ def normalize_login(login: str) -> str:
 
 
 def hash_password(password: str) -> str:
+    if not isinstance(password, str) or len(password) > MAX_PASSWORD_LENGTH:
+        raise ValueError(f"Le mot de passe ne peut pas dépasser {MAX_PASSWORD_LENGTH} caractères")
     salt = os.urandom(16)
     digest = hashlib.pbkdf2_hmac(
         "sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS
@@ -352,6 +355,8 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, encoded: str) -> bool:
+    if not isinstance(password, str) or len(password) > MAX_PASSWORD_LENGTH:
+        return False
     try:
         algorithm, iterations, salt_hex, digest_hex = encoded.split("$", 3)
         if algorithm != "pbkdf2_sha256":
@@ -408,6 +413,8 @@ def create_teacher(login: str, password: str) -> int:
 
 
 def authenticate_user(login: str, password: str, *, allowed_roles=ROLES):
+    if len(login) > 80 or len(password) > MAX_PASSWORD_LENGTH:
+        return None
     with connect() as database:
         user = database.execute(
             "SELECT id, login, password_hash, role, is_active, must_change_password FROM users WHERE login = ?",
@@ -451,7 +458,7 @@ def authenticate_learner(login: str, password: str):
 
 
 def reset_learner_password(*, learner_id: int, new_password: str, actor_id: int) -> bool:
-    if len(new_password) < 12 or not any(c.isalpha() for c in new_password) or not any(c.isdigit() for c in new_password):
+    if len(new_password) < 12 or len(new_password) > MAX_PASSWORD_LENGTH or not any(c.isalpha() for c in new_password) or not any(c.isdigit() for c in new_password):
         return False
     with connect() as database:
         actor = database.execute(
@@ -516,6 +523,7 @@ def list_pending_password_resets():
 def change_user_password(*, user_id: int, current_password: str, new_password: str) -> bool:
     if (
         len(new_password) < 12
+        or len(new_password) > MAX_PASSWORD_LENGTH
         or not any(c.isalpha() for c in new_password)
         or not any(c.isdigit() for c in new_password)
     ):

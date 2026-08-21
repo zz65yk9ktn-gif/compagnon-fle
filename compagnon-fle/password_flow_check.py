@@ -69,6 +69,12 @@ def main():
             assert status == 200 and "Si cet identifiant" in body
             assert len(database.list_pending_password_resets()) == 1
 
+            status, _, body = request(port, "POST", "/connexion/apprenant", {
+                "login": "eleve-test", "password": "A" * 257,
+            })
+            assert status == 401 and "Identifiant ou mot de passe incorrect" in body
+            assert not database.verify_password("A" * 257, database.hash_password("Password1234"))
+
             temporary = "TemporaryPassword123"
             assert database.reset_learner_password(learner_id=learner_id, new_password=temporary, actor_id=admin_id)
             status, headers, _ = request(port, "POST", "/connexion/apprenant", {"login": "eleve-test", "password": temporary})
