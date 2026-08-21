@@ -79,6 +79,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
             assert "Écriture et communication" in dashboard
             assert "Se corriger" in dashboard
             assert "40 questions pour se présenter" in dashboard
+            assert "80 questions" in dashboard and "Préparation aux épreuves" in dashboard
 
             start = "/espace-apprenant/sequence-soutien-methodologie/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -98,6 +99,25 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
             assert "100 %" in page and "40 bonne(s) réponse(s)" in page and "Niveau commun" in page
+
+            start = "/espace-apprenant/sequence-soutien-epreuves/demarrer?nouvelle=1"
+            status, _, page = request(port, "GET", start, cookie=cookie)
+            assert status == 200 and "Soutien · niveau commun" in page
+            from support_exams import SUPPORT_EXAMS_QUESTIONS
+            for index in range(80):
+                question_id = value(page, "question_id")
+                run_id = value(page, "run_id")
+                csrf = value(page, "csrf_token")
+                question = next(item for item in SUPPORT_EXAMS_QUESTIONS if item["id"] == question_id)
+                status, _, feedback = request(port, "POST", "/espace-apprenant/sequence-soutien-epreuves/demarrer", {
+                    "csrf_token": csrf, "run_id": run_id, "question_id": question_id,
+                    "answer": question["correct_answer"],
+                }, cookie)
+                assert status == 200 and "Bravo, c’est juste" in feedback
+                target = "/espace-apprenant/sequence-soutien-epreuves/resultat" if index == 79 else "/espace-apprenant/sequence-soutien-epreuves/demarrer"
+                status, _, page = request(port, "GET", target, cookie=cookie)
+                assert status == 200
+            assert "100 %" in page and "80 bonne(s) réponse(s)" in page and "Niveau commun" in page
 
             start = "/espace-apprenant/sequence-soutien-grammaire/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -234,7 +254,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
         finally:
             process.terminate()
             process.wait(timeout=5)
-    print("SUPPORT_CHECK_OK (456 questions)")
+    print("SUPPORT_CHECK_OK (536 questions)")
 
 
 if __name__ == "__main__":
