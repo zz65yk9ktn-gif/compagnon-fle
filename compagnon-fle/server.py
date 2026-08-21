@@ -46,6 +46,7 @@ from support_vocabulary import SUPPORT_VOCABULARY
 from support_writing import SUPPORT_WRITING
 from support_correction import SUPPORT_CORRECTION
 from support_oral import SUPPORT_ORAL
+from support_exams import SUPPORT_EXAMS
 
 
 validate_question_bank(SEQUENCE_1)
@@ -77,6 +78,7 @@ SUPPORT_SEQUENCES = {
     SUPPORT_WRITING["slug"]: SUPPORT_WRITING,
     SUPPORT_CORRECTION["slug"]: SUPPORT_CORRECTION,
     SUPPORT_ORAL["slug"]: SUPPORT_ORAL,
+    SUPPORT_EXAMS["slug"]: SUPPORT_EXAMS,
 }
 
 
@@ -296,6 +298,7 @@ def learner_space_page(learner) -> str:
       <article class="sequence-card"><h3>Écriture et communication</h3><p>64 questions pour écrire des messages clairs et adaptés.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-ecriture/accueil">Commencer</a></article>
       <article class="sequence-card"><h3>Se corriger</h3><p>64 questions pour relire et corriger ses écrits.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-correction/accueil">Commencer</a></article>
       <article class="sequence-card"><h3>Oral</h3><p>40 questions pour se présenter, raconter et expliquer.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-oral/accueil">Commencer</a></article>
+      <article class="sequence-card"><h3>Préparation aux épreuves</h3><p>80 questions pour analyser, rédiger, gérer son temps et préparer l’oral.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-epreuves/accueil">Commencer</a></article>
     </div>
   </section>"""
         title = f"Mon espace {level}"
