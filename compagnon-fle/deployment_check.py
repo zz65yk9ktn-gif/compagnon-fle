@@ -15,6 +15,7 @@ CHECKS = [
     "navigation_check.py",
     "password_flow_check.py",
     "sequence_6_9_check.py",
+    "support_check.py",
 ]
 
 
