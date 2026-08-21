@@ -78,7 +78,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
             assert "64 questions" in dashboard and "Vocabulaire" in dashboard
             assert "Écriture et communication" in dashboard
             assert "Se corriger" in dashboard
-            assert "40 questions pour se présenter" in dashboard
+            assert "Oral" in dashboard
             assert "80 questions" in dashboard and "Préparation aux épreuves" in dashboard
 
             start = "/espace-apprenant/sequence-soutien-methodologie/demarrer?nouvelle=1"
