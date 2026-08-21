@@ -712,6 +712,18 @@ footer p {
   scroll-margin-top: 16px;
 }
 
+.support-area {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 2px solid #b9d9c7;
+  border-radius: 18px;
+  background: #f3fbf6;
+}
+
+.support-area h2 {
+  margin-top: .25rem;
+}
+
 @media (max-width: 540px) {
   .site-header {
     width: min(100% - 32px, 1080px);
