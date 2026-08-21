@@ -168,7 +168,7 @@ def registration_page(message: str = "", error: bool = False) -> str:
         f"""<section class="card form-card">
   <p class="eyebrow">Espace apprenant</p>
   <h1>Créer mon inscription</h1>
-  <p class="introduction">Après l’inscription, votre compte aura le statut <strong>« En attente d’attribution du niveau »</strong>. Seul un administrateur pourra choisir votre niveau.</p>
+  <p class="introduction">Remplissez ces quatre informations. Un responsable choisira ensuite votre niveau.</p>
   {notice}
   <form method="post" action="/inscription" class="form-grid">
     <label>Prénom<input name="first_name" required maxlength="80" autocomplete="given-name"></label>
@@ -746,7 +746,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             return self.send_html(registration_page("Cet identifiant de connexion existe déjà.", True), 409)
         return self.send_html(
             registration_page(
-                "Inscription enregistrée. Votre compte est en attente d’attribution du niveau."
+                "Inscription enregistrée. Un responsable doit maintenant choisir votre niveau. Vous pourrez ensuite vous connecter avec votre identifiant et le mot de passe commun."
             )
         )
 
