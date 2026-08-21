@@ -23,6 +23,7 @@ from database import (
     change_user_password,
     create_learner,
     get_learner,
+    get_active_learner_by_login,
     get_learner_progress,
     get_active_exercise_run,
     get_exercise_run,
@@ -30,10 +31,7 @@ from database import (
     initialize_database,
     learner_can_access_level,
     list_learners,
-    list_pending_password_resets,
     record_exercise_attempt,
-    reset_learner_password,
-    request_learner_password_reset,
     start_exercise_run,
 )
 from exercise_engine import evaluate_answer, recommendation_for_percentage, validate_question_bank
@@ -49,16 +47,14 @@ BASE_DIR = Path(__file__).resolve().parent
 SESSIONS: dict[str, dict] = {}
 LOGIN_FAILURES: dict[tuple[str, str], deque] = defaultdict(deque)
 REGISTRATION_ATTEMPTS: dict[str, deque] = defaultdict(deque)
-PASSWORD_RESET_ATTEMPTS: dict[str, deque] = defaultdict(deque)
 SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "28800"))
 LOGIN_WINDOW_SECONDS = 15 * 60
 MAX_LOGIN_FAILURES = 5
 REGISTRATION_WINDOW_SECONDS = 60 * 60
 MAX_REGISTRATIONS_PER_IP = 10
-PASSWORD_RESET_WINDOW_SECONDS = 60 * 60
-MAX_PASSWORD_RESET_REQUESTS_PER_IP = 10
 MAX_POST_BODY_BYTES = int(os.environ.get("MAX_POST_BODY_BYTES", "20000"))
 MAX_ACTIVE_SESSIONS = int(os.environ.get("MAX_ACTIVE_SESSIONS", "2000"))
+COMMON_LEARNER_PASSWORD = os.environ.get("COMMON_LEARNER_PASSWORD", "Compagnon2026")
 PRODUCTION = os.environ.get("APP_ENV", "development").lower() == "production"
 SECURE_COOKIES = os.environ.get(
     "SECURE_COOKIES", "true" if PRODUCTION else "false"
@@ -158,8 +154,6 @@ def registration_page(message: str = "", error: bool = False) -> str:
     <label>Date de naissance<input type="date" name="birth_date" required></label>
     <label>Classe<input name="class_name" required maxlength="100" placeholder="Ex. CAP 1 EPC"></label>
     <label>Identifiant de connexion<input name="login" required minlength="3" maxlength="80" autocomplete="username"></label>
-    <label>Mot de passe<input type="password" name="password" required minlength="12" maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="new-password"></label>
-    <label>Confirmer le mot de passe<input type="password" name="confirmation" required minlength="12" maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="new-password"></label>
     <button type="submit">Créer l’inscription</button>
   </form>
 </section>""",
@@ -191,7 +185,7 @@ def learner_login_page(message: str = "") -> str:
         f"""<section class="card form-card compact-card">
   <p class="eyebrow">Espace apprenant</p>
   <h1>Me connecter</h1>
-  <p class="introduction">Utilisez l’identifiant et le mot de passe choisis lors de votre inscription.</p>
+  <p class="introduction">Utilisez votre identifiant et le mot de passe commun donné par votre enseignant.</p>
   {notice}
   <form method="post" action="/connexion/apprenant" class="form-grid">
     <label>Identifiant<input name="login" required autocomplete="username"></label>
@@ -208,13 +202,7 @@ def forgot_password_page(*, staff: bool = False, message: str = "") -> str:
         body = """<p class="notice notice-waiting">Pour protéger l’administration, aucun compte personnel ne peut réinitialiser un accès administrateur. Contactez le responsable du déploiement.</p>
   <p class="form-help"><a href="/administration">Retour à la connexion administration</a></p>"""
     else:
-        notice = f'<p class="notice notice-success" role="status">{esc(message)}</p>' if message else ""
-        body = f"""<p class="introduction">Indiquez votre identifiant. Une demande sera transmise à l’administration sans révéler si le compte existe.</p>
-  {notice}
-  <form method="post" action="/mot-de-passe-oublie" class="form-grid">
-    <label>Identifiant<input name="login" required autocomplete="username"></label>
-    <button type="submit">Demander un nouveau mot de passe</button>
-  </form>
+        body = """<p class="notice notice-waiting">Le mot de passe est le même pour tous les élèves. Demandez-le simplement à votre enseignant.</p>
   <p class="form-help"><a href="/connexion">Retour à la connexion apprenant</a></p>"""
     return layout(
         "Mot de passe oublié",
@@ -281,7 +269,7 @@ def learner_space_page(learner) -> str:
     return layout(
         "Espace apprenant",
         f"""<section class="card form-card compact-card">
-  <div class="section-heading"><div><p class="eyebrow">Bonjour {esc(learner['first_name'])}</p><h1>{title}</h1></div><div class="account-links"><a href="/mot-de-passe">Changer mon mot de passe</a><a href="/deconnexion">Se déconnecter</a></div></div>
+  <div class="section-heading"><div><p class="eyebrow">Bonjour {esc(learner['first_name'])}</p><h1>{title}</h1></div><div class="account-links"><a href="/deconnexion">Se déconnecter</a></div></div>
   {content}
 </section>""",
     )
@@ -324,17 +312,11 @@ def admin_page(session: dict, message: str = "", error: bool = False) -> str:
         if message
         else ""
     )
-    reset_rows = "".join(
-        f'<tr><td><strong>{esc(row["first_name"])}</strong><br><small>{esc(row["login"])}</small></td><td>{esc(row["class_name"])}</td><td>{esc(row["requested_at"])}</td><td><a class="detail-link" href="/administration/apprenant?id={row["learner_id"]}">Ouvrir la fiche</a></td></tr>'
-        for row in list_pending_password_resets()
-    ) or '<tr><td colspan="4" class="empty">Aucune demande en attente.</td></tr>'
     return layout(
         "Inscriptions",
         f"""<section class="admin-section">
   <div class="section-heading"><div><p class="eyebrow">Administration</p><h1>Inscriptions</h1></div><div class="account-links"><a href="/mot-de-passe">Changer mon mot de passe</a><a href="/administration/deconnexion">Se déconnecter</a></div></div>
   {notice}
-  <h2>Demandes de nouveau mot de passe</h2>
-  <div class="table-wrapper reset-table"><table><thead><tr><th>Apprenant</th><th>Classe</th><th>Demandé le</th><th>Action</th></tr></thead><tbody>{reset_rows}</tbody></table></div>
   <h2>Inscriptions</h2>
   <div class="table-wrapper"><table>
     <thead><tr><th>Apprenant</th><th>Naissance</th><th>Classe</th><th>Statut</th><th>Niveau actuel</th><th>Attribution manuelle</th></tr></thead>
@@ -387,7 +369,7 @@ def learner_detail_page(session: dict, learner, message: str = "", error: bool =
   <form method="post" action="/administration/mot-de-passe" class="level-form">
     <input type="hidden" name="csrf_token" value="{esc(session['csrf'])}">
     <input type="hidden" name="learner_id" value="{learner['id']}">
-    <button type="submit">Créer un mot de passe temporaire unique</button>
+    <button type="submit">Rappeler le mot de passe commun</button>
   </form>
   <p><a class="primary-link" href="/administration/apprenant/suivi?id={learner['id']}">Consulter le suivi</a></p>
 </section>""",
@@ -569,6 +551,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             session = self.current_session()
             if not session:
                 return self.redirect("/connexion")
+            if session.get("role") == "learner":
+                return self.redirect("/espace-apprenant")
             return self.send_html(change_password_page(session))
         if path == "/espace-apprenant":
             session = self.current_learner_session()
@@ -708,24 +692,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                 429,
             )
         self.record_rate_event(REGISTRATION_ATTEMPTS, client)
-        required = ("first_name", "birth_date", "class_name", "login", "password", "confirmation")
+        required = ("first_name", "birth_date", "class_name", "login")
         if any(not data.get(field, "").strip() for field in required):
             return self.send_html(registration_page("Tous les champs sont obligatoires.", True), 400)
-        if (
-            len(data["password"]) < 12
-            or len(data["password"]) > MAX_PASSWORD_LENGTH
-            or not any(character.isalpha() for character in data["password"])
-            or not any(character.isdigit() for character in data["password"])
-        ):
-            return self.send_html(
-                registration_page(
-                    f"Le mot de passe doit contenir entre 12 et {MAX_PASSWORD_LENGTH} caractères, avec des lettres et des chiffres.",
-                    True,
-                ),
-                400,
-            )
-        if data["password"] != data["confirmation"]:
-            return self.send_html(registration_page("Les mots de passe ne correspondent pas.", True), 400)
         try:
             born = date.fromisoformat(data["birth_date"])
             if born >= date.today():
@@ -735,7 +704,7 @@ class AppHandler(SimpleHTTPRequestHandler):
         try:
             create_learner(
                 first_name=data["first_name"], birth_date=data["birth_date"],
-                class_name=data["class_name"], login=data["login"], password=data["password"]
+                class_name=data["class_name"], login=data["login"], password=COMMON_LEARNER_PASSWORD
             )
         except sqlite3.IntegrityError:
             return self.send_html(registration_page("Cet identifiant de connexion existe déjà.", True), 409)
@@ -776,6 +745,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                 learner_login_page("Trop de tentatives. Réessayez dans 15 minutes."), 429
             )
         learner = authenticate_learner(data.get("login", ""), data.get("password", ""))
+        if not learner and secrets.compare_digest(data.get("password", ""), COMMON_LEARNER_PASSWORD):
+            learner = get_active_learner_by_login(data.get("login", ""))
         if not learner:
             self.record_rate_event(LOGIN_FAILURES, rate_key)
             return self.send_html(
@@ -787,12 +758,12 @@ class AppHandler(SimpleHTTPRequestHandler):
         SESSIONS[token] = {
             "role": "learner",
             "learner_id": learner["id"],
-            "must_change_password": bool(learner["must_change_password"]),
+            "must_change_password": False,
             "csrf": secrets.token_urlsafe(24),
             "expires_at": time.time() + SESSION_TTL_SECONDS,
         }
         return self.redirect(
-            "/mot-de-passe" if learner["must_change_password"] else "/espace-apprenant",
+            "/espace-apprenant",
             session_cookie(token),
         )
 
@@ -860,37 +831,18 @@ class AppHandler(SimpleHTTPRequestHandler):
             learner_id = int(data.get("learner_id", ""))
         except ValueError:
             return self.send_html(admin_page(session, "Apprenant invalide.", True), 400)
-        temporary_password = "Temp9-" + secrets.token_urlsafe(12)
-        if not reset_learner_password(
-            learner_id=learner_id,
-            new_password=temporary_password,
-            actor_id=session["admin_id"],
-        ):
-            return self.send_html(admin_page(session, "Réinitialisation impossible.", True), 400)
-        invalidate_user_sessions(learner_id=learner_id)
         learner = get_learner(learner_id)
+        if not learner:
+            return self.send_html(admin_page(session, "Apprenant invalide.", True), 404)
         return self.send_html(
             learner_detail_page(
                 session, learner,
-                f"Mot de passe temporaire : {temporary_password} — transmettez-le à l’apprenant. Il devra le remplacer à sa prochaine connexion."
+                f"Mot de passe commun des élèves : {COMMON_LEARNER_PASSWORD}"
             )
         )
 
     def handle_forgot_password(self, data: dict[str, str]):
-        client = self.client_identifier()
-        if not self.rate_limited(
-            PASSWORD_RESET_ATTEMPTS,
-            client,
-            MAX_PASSWORD_RESET_REQUESTS_PER_IP,
-            PASSWORD_RESET_WINDOW_SECONDS,
-        ):
-            self.record_rate_event(PASSWORD_RESET_ATTEMPTS, client)
-            request_learner_password_reset(data.get("login", ""))
-        return self.send_html(
-            forgot_password_page(
-                message="Si cet identifiant correspond à un compte apprenant actif, la demande a été transmise à l’administration."
-            )
-        )
+        return self.send_html(forgot_password_page())
 
     def handle_change_password(self, data: dict[str, str]):
         session = self.current_session()

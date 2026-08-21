@@ -62,12 +62,18 @@ def main():
                 raise AssertionError("Le serveur ne démarre pas")
 
             status, _, body = request(port, "GET", "/connexion")
-            assert status == 200 and "Mot de passe oublié ?" in body
-            status, _, body = request(port, "POST", "/mot-de-passe-oublie", {"login": "inconnu"})
-            assert status == 200 and "Si cet identifiant" in body
-            status, _, body = request(port, "POST", "/mot-de-passe-oublie", {"login": "eleve-test"})
-            assert status == 200 and "Si cet identifiant" in body
-            assert len(database.list_pending_password_resets()) == 1
+            assert status == 200 and "mot de passe commun donné par votre enseignant" in body
+            status, _, body = request(port, "GET", "/mot-de-passe-oublie")
+            assert status == 200 and "même pour tous les élèves" in body
+
+            status, _, body = request(port, "GET", "/inscription")
+            assert status == 200 and 'name="password"' not in body
+            status, _, body = request(port, "POST", "/inscription", {
+                "first_name": "Nouveau", "birth_date": "2009-02-03",
+                "class_name": "CAP", "login": "nouvel-eleve",
+            })
+            assert status == 200 and "Inscription enregistrée" in body
+            assert database.authenticate_learner("nouvel-eleve", "Compagnon2026")
 
             status, _, body = request(port, "POST", "/connexion/apprenant", {
                 "login": "eleve-test", "password": "A" * 257,
@@ -75,34 +81,19 @@ def main():
             assert status == 401 and "Identifiant ou mot de passe incorrect" in body
             assert not database.verify_password("A" * 257, database.hash_password("Password1234"))
 
-            temporary = "TemporaryPassword123"
-            assert database.reset_learner_password(learner_id=learner_id, new_password=temporary, actor_id=admin_id)
-            status, headers, _ = request(port, "POST", "/connexion/apprenant", {"login": "eleve-test", "password": temporary})
-            assert status == 303 and headers["Location"] == "/mot-de-passe"
+            # The shared password works even for an existing learner whose stored password differs.
+            status, headers, _ = request(port, "POST", "/connexion/apprenant", {
+                "login": "eleve-test", "password": "Compagnon2026",
+            })
+            assert status == 303 and headers["Location"] == "/espace-apprenant"
             morsel = SimpleCookie(headers["Set-Cookie"])["session"]
             cookie = f"session={morsel.value}"
-            status, _, body = request(port, "GET", "/mot-de-passe", cookie=cookie)
-            assert status == 200 and "doit être remplacé" in body
-            # Read the CSRF token rendered in the page; it belongs to the subprocess session.
-            marker = 'name="csrf_token" value="'
-            csrf = body.split(marker, 1)[1].split('"', 1)[0]
-            status, _, body = request(port, "POST", "/mot-de-passe", {
-                "csrf_token": csrf, "current_password": "incorrect",
-                "new_password": "NewLearnerPassword456", "confirmation": "NewLearnerPassword456",
-            }, cookie)
-            assert status == 401 and "Mot de passe actuel incorrect" in body
-            status, headers, _ = request(port, "POST", "/mot-de-passe", {
-                "csrf_token": csrf, "current_password": temporary,
-                "new_password": "NewLearnerPassword456", "confirmation": "NewLearnerPassword456",
-            }, cookie)
-            assert status == 303 and headers["Location"] == "/connexion"
-            assert "Max-Age=0" in headers["Set-Cookie"]
-            status, _, _ = request(port, "GET", "/espace-apprenant", cookie=cookie)
-            assert status == 401
-            assert database.authenticate_learner("eleve-test", "NewLearnerPassword456")
-            assert not database.authenticate_learner("eleve-test", temporary)
+            status, headers, _ = request(port, "GET", "/mot-de-passe", cookie=cookie)
+            assert status == 303 and headers["Location"] == "/espace-apprenant"
 
-            # Staff accounts use the same protected change flow and lose old sessions.
+            marker = 'name="csrf_token" value="'
+
+            # Staff accounts keep their separate protected change flow.
             status, headers, _ = request(port, "POST", "/administration/connexion", {
                 "login": "admin-test", "password": "AdminPassword123",
             })

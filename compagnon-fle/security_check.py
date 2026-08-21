@@ -30,7 +30,6 @@ def static_checks() -> None:
         "MAX_ACTIVE_SESSIONS",
         "secrets.compare_digest",
         "MAX_LOGIN_FAILURES",
-        "MAX_PASSWORD_RESET_REQUESTS_PER_IP",
         "invalidate_user_sessions",
         "MAX_PASSWORD_LENGTH",
     ]
