@@ -101,6 +101,45 @@ def main():
             assert status == 401
             assert database.authenticate_learner("eleve-test", "NewLearnerPassword456")
             assert not database.authenticate_learner("eleve-test", temporary)
+
+            # Staff accounts use the same protected change flow and lose old sessions.
+            status, headers, _ = request(port, "POST", "/administration/connexion", {
+                "login": "admin-test", "password": "AdminPassword123",
+            })
+            assert status == 303 and headers["Location"] == "/administration"
+            admin_morsel = SimpleCookie(headers["Set-Cookie"])["session"]
+            admin_cookie = f"session={admin_morsel.value}"
+            status, _, body = request(port, "GET", "/mot-de-passe", cookie=admin_cookie)
+            assert status == 200
+            admin_csrf = body.split(marker, 1)[1].split('"', 1)[0]
+
+            status, _, body = request(port, "POST", "/mot-de-passe", {
+                "csrf_token": admin_csrf, "current_password": "AdminPassword123",
+                "new_password": "NewAdminPassword456", "confirmation": "DifferentPassword789",
+            }, admin_cookie)
+            assert status == 400 and "ne correspondent pas" in body
+
+            status, headers, _ = request(port, "POST", "/mot-de-passe", {
+                "csrf_token": admin_csrf, "current_password": "AdminPassword123",
+                "new_password": "NewAdminPassword456", "confirmation": "NewAdminPassword456",
+            }, admin_cookie)
+            assert status == 303 and headers["Location"] == "/administration"
+            assert "Max-Age=0" in headers["Set-Cookie"]
+            status, _, body = request(port, "GET", "/administration", cookie=admin_cookie)
+            assert status == 200 and "Administration des inscriptions" in body
+            assert database.authenticate_admin("admin-test", "NewAdminPassword456")
+            assert not database.authenticate_admin("admin-test", "AdminPassword123")
+
+            # Login errors remain generic, accessible, and rate-limited.
+            for _ in range(5):
+                status, _, body = request(port, "POST", "/administration/connexion", {
+                    "login": "admin-test", "password": "WrongPassword123",
+                })
+                assert status == 401 and 'role="alert"' in body
+            status, _, body = request(port, "POST", "/administration/connexion", {
+                "login": "admin-test", "password": "WrongPassword123",
+            })
+            assert status == 429 and "Trop de tentatives" in body
         finally:
             process.terminate()
             process.wait(timeout=5)
