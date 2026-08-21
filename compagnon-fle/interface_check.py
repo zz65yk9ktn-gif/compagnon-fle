@@ -69,5 +69,6 @@ result = module.result_page(
     {'level': 'A0', 'evaluated_count': 5, 'success_count': 5, 'score_percentage': 100, 'manual_review_count': 0},
     {'slug': 'sequence-6', 'title': 'Séquence 6'},
 )
-assert 'href="/espace-apprenant/sequence-6/demarrer?nouvelle=1">Commencer une nouvelle série</a>' in result
+assert 'href="/espace-apprenant/sequence-6/demarrer?nouvelle=1">Recommencer</a>' in result
+assert "0 production(s)" not in result
 print('INTERFACE_CHECK_OK')
