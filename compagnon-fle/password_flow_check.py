@@ -117,8 +117,14 @@ def main():
             }, admin_cookie)
             assert status == 303 and headers["Location"] == "/administration"
             assert "Max-Age=0" in headers["Set-Cookie"]
+            status, headers, _ = request(port, "POST", "/administration/connexion", {
+                "login": "admin-test", "password": "NewAdminPassword456",
+            })
+            assert status == 303 and headers["Location"] == "/administration"
+            admin_morsel = SimpleCookie(headers["Set-Cookie"])["session"]
+            admin_cookie = f"session={admin_morsel.value}"
             status, _, body = request(port, "GET", "/administration", cookie=admin_cookie)
-            assert status == 200 and "Administration des inscriptions" in body
+            assert status == 200 and "<h1>Inscriptions</h1>" in body
             assert "Mot de passe de tous les élèves" in body and "Compagnon2026" in body
             assert database.authenticate_admin("admin-test", "NewAdminPassword456")
             assert not database.authenticate_admin("admin-test", "AdminPassword123")
