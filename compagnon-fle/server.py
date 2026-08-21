@@ -167,7 +167,7 @@ def registration_page(message: str = "", error: bool = False) -> str:
 
 
 def admin_login_page(message: str = "") -> str:
-    notice = f'<p class="notice notice-error">{esc(message)}</p>' if message else ""
+    notice = f'<p class="notice notice-error" role="alert">{esc(message)}</p>' if message else ""
     return layout(
         "Administration",
         f"""<section class="card form-card compact-card">
@@ -185,7 +185,7 @@ def admin_login_page(message: str = "") -> str:
 
 
 def learner_login_page(message: str = "") -> str:
-    notice = f'<p class="notice notice-error">{esc(message)}</p>' if message else ""
+    notice = f'<p class="notice notice-error" role="alert">{esc(message)}</p>' if message else ""
     return layout(
         "Connexion apprenant",
         f"""<section class="card form-card compact-card">
@@ -226,7 +226,7 @@ def forgot_password_page(*, staff: bool = False, message: str = "") -> str:
 
 def change_password_page(session: dict, message: str = "", error: bool = False) -> str:
     notice = (
-        f'<p class="notice {"notice-error" if error else "notice-success"}" role="alert">{esc(message)}</p>'
+        f'<p class="notice {"notice-error" if error else "notice-success"}" role="{"alert" if error else "status"}">{esc(message)}</p>'
         if message else ""
     )
     required = (
@@ -242,9 +242,9 @@ def change_password_page(session: dict, message: str = "", error: bool = False) 
   <form method="post" action="/mot-de-passe" class="form-grid">
     <input type="hidden" name="csrf_token" value="{esc(session['csrf'])}">
     <label>Mot de passe actuel<input type="password" name="current_password" required maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="current-password"></label>
-    <label>Nouveau mot de passe<input type="password" name="new_password" required minlength="12" maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="new-password"></label>
-    <label>Confirmer le nouveau mot de passe<input type="password" name="confirmation" required minlength="12" maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="new-password"></label>
-    <p class="password-rules">Entre 12 et {MAX_PASSWORD_LENGTH} caractères, avec au moins une lettre et un chiffre.</p>
+    <label>Nouveau mot de passe<input type="password" name="new_password" required minlength="12" maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="new-password" aria-describedby="password-rules"></label>
+    <label>Confirmer le nouveau mot de passe<input type="password" name="confirmation" required minlength="12" maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="new-password" aria-describedby="password-rules"></label>
+    <p class="password-rules" id="password-rules">Entre 12 et {MAX_PASSWORD_LENGTH} caractères, avec au moins une lettre et un chiffre.</p>
     <button type="submit">Enregistrer le nouveau mot de passe</button>
   </form>
   {'' if session.get('must_change_password') else f'<p class="form-help"><a href="{back}">Retour</a></p>'}

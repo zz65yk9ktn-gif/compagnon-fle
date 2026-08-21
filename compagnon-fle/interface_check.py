@@ -4,6 +4,7 @@ import importlib.util
 ROOT = Path(__file__).resolve().parent
 css = (ROOT / 'styles.css').read_text(encoding='utf-8')
 view_text = (ROOT / 'sequence_views.py').read_text(encoding='utf-8')
+server_text = (ROOT / 'server.py').read_text(encoding='utf-8')
 
 required_css = [
     'min-height: 92px',
@@ -17,6 +18,9 @@ for marker in required_css:
 
 for marker in ['role="group"', 'aria-label="Réponses proposées"', 'aria-live="polite"', 'role="alert"']:
     assert marker in view_text, marker
+
+for marker in ['notice-error" role="alert"', 'aria-describedby="password-rules"', 'id="password-rules"']:
+    assert marker in server_text, marker
 
 spec = importlib.util.spec_from_file_location('sequence_views', ROOT / 'sequence_views.py')
 module = importlib.util.module_from_spec(spec)
