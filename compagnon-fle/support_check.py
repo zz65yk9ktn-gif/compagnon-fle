@@ -71,7 +71,8 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
             morsel = SimpleCookie(headers["Set-Cookie"])["session"]
             cookie = f"session={morsel.value}"
             status, _, dashboard = request(port, "GET", "/espace-apprenant", cookie=cookie)
-            assert status == 200 and "Soutien en français" in dashboard and "40 questions" in dashboard
+            assert status == 200 and "Soutien en français" in dashboard
+            assert "40 questions" in dashboard and "72 questions" in dashboard
 
             start = "/espace-apprenant/sequence-soutien-methodologie/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -91,10 +92,29 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
             assert "100 %" in page and "40 bonne(s) réponse(s)" in page and "Niveau commun" in page
+
+            start = "/espace-apprenant/sequence-soutien-grammaire/demarrer?nouvelle=1"
+            status, _, page = request(port, "GET", start, cookie=cookie)
+            assert status == 200 and "Soutien · niveau commun" in page
+            from support_grammar import SUPPORT_GRAMMAR_QUESTIONS
+            for index in range(72):
+                question_id = value(page, "question_id")
+                run_id = value(page, "run_id")
+                csrf = value(page, "csrf_token")
+                question = next(item for item in SUPPORT_GRAMMAR_QUESTIONS if item["id"] == question_id)
+                status, _, feedback = request(port, "POST", "/espace-apprenant/sequence-soutien-grammaire/demarrer", {
+                    "csrf_token": csrf, "run_id": run_id, "question_id": question_id,
+                    "answer": question["correct_answer"],
+                }, cookie)
+                assert status == 200 and "Bravo, c’est juste" in feedback
+                target = "/espace-apprenant/sequence-soutien-grammaire/resultat" if index == 71 else "/espace-apprenant/sequence-soutien-grammaire/demarrer"
+                status, _, page = request(port, "GET", target, cookie=cookie)
+                assert status == 200
+            assert "100 %" in page and "72 bonne(s) réponse(s)" in page and "Niveau commun" in page
         finally:
             process.terminate()
             process.wait(timeout=5)
-    print("SUPPORT_CHECK_OK (40 questions)")
+    print("SUPPORT_CHECK_OK (112 questions)")
 
 
 if __name__ == "__main__":
