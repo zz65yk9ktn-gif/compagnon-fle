@@ -123,7 +123,10 @@ h1 {
 
 .primary-link,
 button {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
   margin-top: 24px;
   padding: 12px 18px;
   color: #ffffff;
@@ -339,6 +342,13 @@ small {
   background: #ffffff;
   border: 1px solid #dfe6e9;
   border-radius: 12px;
+}
+
+.sequence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin-top: 18px;
 }
 
 .sequence-card,
@@ -764,6 +774,10 @@ footer p {
   }
 
   .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sequence-grid {
     grid-template-columns: 1fr;
   }
 
