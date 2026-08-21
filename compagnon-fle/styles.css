@@ -155,6 +155,34 @@ button:hover {
   margin-top: 28px;
 }
 
+.form-help,
+.password-rules {
+  margin: 18px 0 0;
+  color: #526168;
+  line-height: 1.5;
+}
+
+.form-help a {
+  color: #245b78;
+  font-weight: 700;
+}
+
+.password-rules {
+  margin: -4px 0 0;
+  font-size: 0.88rem;
+}
+
+.account-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.reset-table {
+  margin-bottom: 32px;
+}
+
 label {
   display: grid;
   gap: 7px;

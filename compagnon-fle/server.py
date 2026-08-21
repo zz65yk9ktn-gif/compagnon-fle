@@ -19,6 +19,7 @@ from database import (
     assign_level,
     authenticate_staff,
     authenticate_learner,
+    change_user_password,
     create_learner,
     get_learner,
     get_learner_progress,
@@ -28,8 +29,10 @@ from database import (
     initialize_database,
     learner_can_access_level,
     list_learners,
+    list_pending_password_resets,
     record_exercise_attempt,
     reset_learner_password,
+    request_learner_password_reset,
     start_exercise_run,
 )
 from exercise_engine import evaluate_answer, recommendation_for_percentage, validate_question_bank
@@ -52,7 +55,6 @@ REGISTRATION_WINDOW_SECONDS = 60 * 60
 MAX_REGISTRATIONS_PER_IP = 10
 MAX_POST_BODY_BYTES = int(os.environ.get("MAX_POST_BODY_BYTES", "20000"))
 MAX_ACTIVE_SESSIONS = int(os.environ.get("MAX_ACTIVE_SESSIONS", "2000"))
-COMMON_LEARNER_PASSWORD = os.environ.get("COMMON_LEARNER_PASSWORD", "Compagnon2026")
 PRODUCTION = os.environ.get("APP_ENV", "development").lower() == "production"
 SECURE_COOKIES = os.environ.get(
     "SECURE_COOKIES", "true" if PRODUCTION else "false"
@@ -165,6 +167,7 @@ def admin_login_page(message: str = "") -> str:
     <label>Mot de passe<input type="password" name="password" required autocomplete="current-password"></label>
     <button type="submit">Se connecter</button>
   </form>
+  <p class="form-help"><a href="/mot-de-passe-oublie?compte=administration">Mot de passe oublié ?</a></p>
 </section>""",
     )
 
@@ -183,6 +186,56 @@ def learner_login_page(message: str = "") -> str:
     <label>Mot de passe<input type="password" name="password" required autocomplete="current-password"></label>
     <button type="submit">Accéder à mon espace</button>
   </form>
+  <p class="form-help"><a href="/mot-de-passe-oublie">Mot de passe oublié ?</a></p>
+</section>""",
+    )
+
+
+def forgot_password_page(*, staff: bool = False, message: str = "") -> str:
+    if staff:
+        body = """<p class="notice notice-waiting">Pour protéger l’administration, aucun compte personnel ne peut réinitialiser un accès administrateur. Contactez le responsable du déploiement.</p>
+  <p class="form-help"><a href="/administration">Retour à la connexion administration</a></p>"""
+    else:
+        notice = f'<p class="notice notice-success" role="status">{esc(message)}</p>' if message else ""
+        body = f"""<p class="introduction">Indiquez votre identifiant. Une demande sera transmise à l’administration sans révéler si le compte existe.</p>
+  {notice}
+  <form method="post" action="/mot-de-passe-oublie" class="form-grid">
+    <label>Identifiant<input name="login" required autocomplete="username"></label>
+    <button type="submit">Demander un nouveau mot de passe</button>
+  </form>
+  <p class="form-help"><a href="/connexion">Retour à la connexion apprenant</a></p>"""
+    return layout(
+        "Mot de passe oublié",
+        f"""<section class="card form-card compact-card">
+  <p class="eyebrow">Récupération du compte</p><h1>Mot de passe oublié</h1>{body}
+</section>""",
+    )
+
+
+def change_password_page(session: dict, message: str = "", error: bool = False) -> str:
+    notice = (
+        f'<p class="notice {"notice-error" if error else "notice-success"}" role="alert">{esc(message)}</p>'
+        if message else ""
+    )
+    required = (
+        '<p class="notice notice-waiting">Le mot de passe temporaire doit être remplacé avant de continuer.</p>'
+        if session.get("must_change_password") else ""
+    )
+    back = "/espace-apprenant" if session["role"] == "learner" else "/administration"
+    return layout(
+        "Changer mon mot de passe",
+        f"""<section class="card form-card compact-card">
+  <p class="eyebrow">Sécurité du compte</p><h1>Changer mon mot de passe</h1>
+  {required}{notice}
+  <form method="post" action="/mot-de-passe" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{esc(session['csrf'])}">
+    <label>Mot de passe actuel<input type="password" name="current_password" required autocomplete="current-password"></label>
+    <label>Nouveau mot de passe<input type="password" name="new_password" required minlength="12" autocomplete="new-password"></label>
+    <label>Confirmer le nouveau mot de passe<input type="password" name="confirmation" required minlength="12" autocomplete="new-password"></label>
+    <p class="password-rules">12 caractères minimum, avec au moins une lettre et un chiffre.</p>
+    <button type="submit">Enregistrer le nouveau mot de passe</button>
+  </form>
+  {'' if session.get('must_change_password') else f'<p class="form-help"><a href="{back}">Retour</a></p>'}
 </section>""",
     )
 
@@ -216,7 +269,7 @@ def learner_space_page(learner) -> str:
     return layout(
         "Espace apprenant",
         f"""<section class="card form-card compact-card">
-  <div class="section-heading"><div><p class="eyebrow">Bonjour {esc(learner['first_name'])}</p><h1>{title}</h1></div><a href="/deconnexion">Se déconnecter</a></div>
+  <div class="section-heading"><div><p class="eyebrow">Bonjour {esc(learner['first_name'])}</p><h1>{title}</h1></div><div class="account-links"><a href="/mot-de-passe">Changer mon mot de passe</a><a href="/deconnexion">Se déconnecter</a></div></div>
   {content}
 </section>""",
     )
@@ -259,11 +312,18 @@ def admin_page(session: dict, message: str = "", error: bool = False) -> str:
         if message
         else ""
     )
+    reset_rows = "".join(
+        f'<tr><td><strong>{esc(row["first_name"])}</strong><br><small>{esc(row["login"])}</small></td><td>{esc(row["class_name"])}</td><td>{esc(row["requested_at"])}</td><td><a class="detail-link" href="/administration/apprenant?id={row["learner_id"]}">Ouvrir la fiche</a></td></tr>'
+        for row in list_pending_password_resets()
+    ) or '<tr><td colspan="4" class="empty">Aucune demande en attente.</td></tr>'
     return layout(
         "Inscriptions",
         f"""<section class="admin-section">
-  <div class="section-heading"><div><p class="eyebrow">Administration</p><h1>Inscriptions</h1></div><a href="/administration/deconnexion">Se déconnecter</a></div>
+  <div class="section-heading"><div><p class="eyebrow">Administration</p><h1>Inscriptions</h1></div><div class="account-links"><a href="/mot-de-passe">Changer mon mot de passe</a><a href="/administration/deconnexion">Se déconnecter</a></div></div>
   {notice}
+  <h2>Demandes de nouveau mot de passe</h2>
+  <div class="table-wrapper reset-table"><table><thead><tr><th>Apprenant</th><th>Classe</th><th>Demandé le</th><th>Action</th></tr></thead><tbody>{reset_rows}</tbody></table></div>
+  <h2>Inscriptions</h2>
   <div class="table-wrapper"><table>
     <thead><tr><th>Apprenant</th><th>Naissance</th><th>Classe</th><th>Statut</th><th>Niveau actuel</th><th>Attribution manuelle</th></tr></thead>
     <tbody>{body}</tbody>
@@ -315,7 +375,7 @@ def learner_detail_page(session: dict, learner, message: str = "", error: bool =
   <form method="post" action="/administration/mot-de-passe" class="level-form">
     <input type="hidden" name="csrf_token" value="{esc(session['csrf'])}">
     <input type="hidden" name="learner_id" value="{learner['id']}">
-    <button type="submit">Réinitialiser au mot de passe commun</button>
+    <button type="submit">Créer un mot de passe temporaire unique</button>
   </form>
   <p><a class="primary-link" href="/administration/apprenant/suivi?id={learner['id']}">Consulter le suivi</a></p>
 </section>""",
@@ -471,6 +531,9 @@ class AppHandler(SimpleHTTPRequestHandler):
         session = self.current_session()
         return session if session and session.get("role") == "learner" else None
 
+    def password_change_required(self, session) -> bool:
+        return bool(session and session.get("must_change_password"))
+
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/health":
@@ -484,11 +547,23 @@ class AppHandler(SimpleHTTPRequestHandler):
             return self.send_html(registration_page())
         if path == "/connexion":
             session = self.current_learner_session()
-            return self.redirect("/espace-apprenant") if session else self.send_html(learner_login_page())
+            if session:
+                return self.redirect("/mot-de-passe" if self.password_change_required(session) else "/espace-apprenant")
+            return self.send_html(learner_login_page())
+        if path == "/mot-de-passe-oublie":
+            staff = parse_qs(urlparse(self.path).query).get("compte") == ["administration"]
+            return self.send_html(forgot_password_page(staff=staff))
+        if path == "/mot-de-passe":
+            session = self.current_session()
+            if not session:
+                return self.redirect("/connexion")
+            return self.send_html(change_password_page(session))
         if path == "/espace-apprenant":
             session = self.current_learner_session()
             if not session:
                 return self.send_html(learner_login_page("Connectez-vous pour accéder à votre espace."), 401)
+            if self.password_change_required(session):
+                return self.redirect("/mot-de-passe")
             learner = get_learner(session["learner_id"])
             if not learner:
                 return self.send_html(learner_login_page("Ce compte n’est plus disponible."), 401)
@@ -507,6 +582,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                 if not session:
                     message = "Connectez-vous pour voir ce résultat." if action == "resultat" else "Connectez-vous pour accéder à cette séquence."
                     return self.send_html(learner_login_page(message), 401)
+                if self.password_change_required(session):
+                    return self.redirect("/mot-de-passe")
                 learner = get_learner(session["learner_id"])
                 if not learner or not learner["assigned_level"] or not learner_can_access_level(learner["id"], learner["assigned_level"]):
                     return self.send_error(403, "Cette séquence ne correspond pas à votre niveau")
@@ -543,11 +620,15 @@ class AppHandler(SimpleHTTPRequestHandler):
             )
         if path == "/administration":
             session = self.current_admin_session()
+            if self.password_change_required(session):
+                return self.redirect("/mot-de-passe")
             return self.send_html(admin_page(session) if session else admin_login_page())
         if path == "/administration/apprenant":
             session = self.current_admin_session()
             if not session:
                 return self.send_html(admin_login_page("Connectez-vous pour consulter cette fiche."), 401)
+            if self.password_change_required(session):
+                return self.redirect("/mot-de-passe")
             try:
                 learner_id = int(parse_qs(urlparse(self.path).query).get("id", [""])[0])
             except ValueError:
@@ -558,6 +639,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             session = self.current_admin_session()
             if not session:
                 return self.send_html(admin_login_page("Connectez-vous pour consulter ce suivi."), 401)
+            if self.password_change_required(session):
+                return self.redirect("/mot-de-passe")
             try:
                 learner_id = int(parse_qs(urlparse(self.path).query).get("id", [""])[0])
             except ValueError:
@@ -583,6 +666,10 @@ class AppHandler(SimpleHTTPRequestHandler):
             return self.send_error(413 if "volumineuse" in str(error) else 400, str(error))
         if path == "/inscription":
             return self.handle_registration(data)
+        if path == "/mot-de-passe-oublie":
+            return self.handle_forgot_password(data)
+        if path == "/mot-de-passe":
+            return self.handle_change_password(data)
         if path == "/administration/connexion":
             return self.handle_admin_login(data)
         if path == "/administration/niveau":
@@ -659,11 +746,12 @@ class AppHandler(SimpleHTTPRequestHandler):
         SESSIONS[token] = {
             "role": staff["role"],
             "admin_id": staff["id"],
+            "must_change_password": bool(staff["must_change_password"]),
             "csrf": secrets.token_urlsafe(24),
             "expires_at": time.time() + SESSION_TTL_SECONDS,
         }
         return self.redirect(
-            "/administration",
+            "/mot-de-passe" if staff["must_change_password"] else "/administration",
             session_cookie(token),
         )
 
@@ -686,11 +774,12 @@ class AppHandler(SimpleHTTPRequestHandler):
         SESSIONS[token] = {
             "role": "learner",
             "learner_id": learner["id"],
+            "must_change_password": bool(learner["must_change_password"]),
             "csrf": secrets.token_urlsafe(24),
             "expires_at": time.time() + SESSION_TTL_SECONDS,
         }
         return self.redirect(
-            "/espace-apprenant",
+            "/mot-de-passe" if learner["must_change_password"] else "/espace-apprenant",
             session_cookie(token),
         )
 
@@ -750,29 +839,65 @@ class AppHandler(SimpleHTTPRequestHandler):
         session = self.current_admin_session()
         if not session:
             return self.send_html(admin_login_page("Votre session a expiré."), 401)
+        if self.password_change_required(session):
+            return self.redirect("/mot-de-passe")
         if not secrets.compare_digest(data.get("csrf_token", ""), session["csrf"]):
             return self.send_html(admin_page(session, "Requête non autorisée.", True), 403)
         try:
             learner_id = int(data.get("learner_id", ""))
         except ValueError:
             return self.send_html(admin_page(session, "Apprenant invalide.", True), 400)
+        temporary_password = "Temp9-" + secrets.token_urlsafe(12)
         if not reset_learner_password(
             learner_id=learner_id,
-            new_password=COMMON_LEARNER_PASSWORD,
+            new_password=temporary_password,
             actor_id=session["admin_id"],
         ):
             return self.send_html(admin_page(session, "Réinitialisation impossible.", True), 400)
         learner = get_learner(learner_id)
         return self.send_html(
             learner_detail_page(
-                session, learner, "Mot de passe réinitialisé au mot de passe commun."
+                session, learner,
+                f"Mot de passe temporaire : {temporary_password} — transmettez-le à l’apprenant. Il devra le remplacer à sa prochaine connexion."
             )
         )
+
+    def handle_forgot_password(self, data: dict[str, str]):
+        request_learner_password_reset(data.get("login", ""))
+        return self.send_html(
+            forgot_password_page(
+                message="Si cet identifiant correspond à un compte apprenant actif, la demande a été transmise à l’administration."
+            )
+        )
+
+    def handle_change_password(self, data: dict[str, str]):
+        session = self.current_session()
+        if not session:
+            return self.redirect("/connexion")
+        if not secrets.compare_digest(data.get("csrf_token", ""), session["csrf"]):
+            return self.send_html(change_password_page(session, "Requête non autorisée.", True), 403)
+        new_password = data.get("new_password", "")
+        if new_password != data.get("confirmation", ""):
+            return self.send_html(change_password_page(session, "Les nouveaux mots de passe ne correspondent pas.", True), 400)
+        if len(new_password) < 12 or not any(c.isalpha() for c in new_password) or not any(c.isdigit() for c in new_password):
+            return self.send_html(change_password_page(session, "Le nouveau mot de passe doit contenir au moins 12 caractères, avec des lettres et des chiffres.", True), 400)
+        user_id = session.get("learner_id") or session.get("admin_id")
+        if not change_user_password(
+            user_id=user_id,
+            current_password=data.get("current_password", ""),
+            new_password=new_password,
+        ):
+            return self.send_html(change_password_page(session, "Mot de passe actuel incorrect ou nouveau mot de passe inchangé.", True), 401)
+        session["must_change_password"] = False
+        destination = dashboard_path_for_role(session["role"])
+        return self.redirect(destination)
 
     def handle_level_assignment(self, data: dict[str, str]):
         session = self.current_admin_session()
         if not session:
             return self.send_html(admin_login_page("Votre session a expiré."), 401)
+        if self.password_change_required(session):
+            return self.redirect("/mot-de-passe")
         if not secrets.compare_digest(data.get("csrf_token", ""), session["csrf"]):
             return self.send_html(admin_page(session, "Requête non autorisée.", True), 403)
         try:
