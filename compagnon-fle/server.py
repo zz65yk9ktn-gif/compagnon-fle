@@ -48,11 +48,14 @@ BASE_DIR = Path(__file__).resolve().parent
 SESSIONS: dict[str, dict] = {}
 LOGIN_FAILURES: dict[tuple[str, str], deque] = defaultdict(deque)
 REGISTRATION_ATTEMPTS: dict[str, deque] = defaultdict(deque)
+PASSWORD_RESET_ATTEMPTS: dict[str, deque] = defaultdict(deque)
 SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "28800"))
 LOGIN_WINDOW_SECONDS = 15 * 60
 MAX_LOGIN_FAILURES = 5
 REGISTRATION_WINDOW_SECONDS = 60 * 60
 MAX_REGISTRATIONS_PER_IP = 10
+PASSWORD_RESET_WINDOW_SECONDS = 60 * 60
+MAX_PASSWORD_RESET_REQUESTS_PER_IP = 10
 MAX_POST_BODY_BYTES = int(os.environ.get("MAX_POST_BODY_BYTES", "20000"))
 MAX_ACTIVE_SESSIONS = int(os.environ.get("MAX_ACTIVE_SESSIONS", "2000"))
 PRODUCTION = os.environ.get("APP_ENV", "development").lower() == "production"
@@ -73,6 +76,14 @@ def purge_expired_sessions() -> None:
     if len(SESSIONS) > MAX_ACTIVE_SESSIONS:
         oldest = sorted(SESSIONS.items(), key=lambda item: item[1].get("expires_at", 0))
         for token, _session in oldest[: len(SESSIONS) - MAX_ACTIVE_SESSIONS]:
+            SESSIONS.pop(token, None)
+
+
+def invalidate_user_sessions(*, learner_id: int | None = None, staff_id: int | None = None) -> None:
+    for token, session in list(SESSIONS.items()):
+        if learner_id is not None and session.get("learner_id") == learner_id:
+            SESSIONS.pop(token, None)
+        elif staff_id is not None and session.get("admin_id") == staff_id:
             SESSIONS.pop(token, None)
 
 
@@ -854,6 +865,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             actor_id=session["admin_id"],
         ):
             return self.send_html(admin_page(session, "Réinitialisation impossible.", True), 400)
+        invalidate_user_sessions(learner_id=learner_id)
         learner = get_learner(learner_id)
         return self.send_html(
             learner_detail_page(
@@ -863,7 +875,15 @@ class AppHandler(SimpleHTTPRequestHandler):
         )
 
     def handle_forgot_password(self, data: dict[str, str]):
-        request_learner_password_reset(data.get("login", ""))
+        client = self.client_identifier()
+        if not self.rate_limited(
+            PASSWORD_RESET_ATTEMPTS,
+            client,
+            MAX_PASSWORD_RESET_REQUESTS_PER_IP,
+            PASSWORD_RESET_WINDOW_SECONDS,
+        ):
+            self.record_rate_event(PASSWORD_RESET_ATTEMPTS, client)
+            request_learner_password_reset(data.get("login", ""))
         return self.send_html(
             forgot_password_page(
                 message="Si cet identifiant correspond à un compte apprenant actif, la demande a été transmise à l’administration."
@@ -888,9 +908,14 @@ class AppHandler(SimpleHTTPRequestHandler):
             new_password=new_password,
         ):
             return self.send_html(change_password_page(session, "Mot de passe actuel incorrect ou nouveau mot de passe inchangé.", True), 401)
-        session["must_change_password"] = False
-        destination = dashboard_path_for_role(session["role"])
-        return self.redirect(destination)
+        role = session["role"]
+        if role == "learner":
+            invalidate_user_sessions(learner_id=user_id)
+            destination = "/connexion"
+        else:
+            invalidate_user_sessions(staff_id=user_id)
+            destination = "/administration"
+        return self.redirect(destination, session_cookie("", clear=True))
 
     def handle_level_assignment(self, data: dict[str, str]):
         session = self.current_admin_session()
