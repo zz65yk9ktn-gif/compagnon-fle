@@ -353,6 +353,7 @@ def admin_page(session: dict, message: str = "", error: bool = False) -> str:
         f"""<section class="admin-section">
   <div class="section-heading"><div><p class="eyebrow">Administration</p><h1>Inscriptions</h1></div><div class="account-links"><a href="/mot-de-passe">Changer mon mot de passe</a><a href="/administration/deconnexion">Se déconnecter</a></div></div>
   {notice}
+  <p class="notice notice-success"><strong>Mot de passe de tous les élèves :</strong> {esc(COMMON_LEARNER_PASSWORD)}</p>
   <h2>Inscriptions</h2>
   <div class="table-wrapper"><table>
     <thead><tr><th>Apprenant</th><th>Naissance</th><th>Classe</th><th>Statut</th><th>Niveau actuel</th><th>Attribution manuelle</th></tr></thead>
@@ -394,6 +395,7 @@ def learner_detail_page(session: dict, learner, message: str = "", error: bool =
     <div><dt>Inscription</dt><dd>{esc(learner['created_at'])}</dd></div>
     <div><dt>Statut</dt><dd>{esc(status)}</dd></div>
     <div><dt>Accès</dt><dd>{access}</dd></div>
+    <div><dt>Mot de passe élève</dt><dd><strong>{esc(COMMON_LEARNER_PASSWORD)}</strong></dd></div>
   </dl>
     <form method="post" action="/administration/niveau" class="level-form">
     <input type="hidden" name="csrf_token" value="{esc(session['csrf'])}">
