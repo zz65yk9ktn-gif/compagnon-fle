@@ -280,7 +280,7 @@ def learner_space_page(learner) -> str:
     <p class="eyebrow">Séquence {number} · {count} questions</p>
     <h2>{esc(sequence['title'])}</h2>
     <p>Une question à la fois, avec un retour après chaque réponse.</p>
-    <a class="primary-link" href="/espace-apprenant/{sequence['slug']}/accueil">Commencer la séquence {number}</a>
+    <a class="primary-link" href="/espace-apprenant/{sequence['slug']}/demarrer">Commencer la séquence {number}</a>
   </article>""")
         pilot = '<div class="sequence-grid">' + "".join(sequence_cards) + "</div>"
         content = f"""<p class="level-badge">Niveau {level}</p>
@@ -290,15 +290,15 @@ def learner_space_page(learner) -> str:
     <p class="eyebrow">Soutien en français · niveau commun</p>
     <h2>Mes séries de soutien</h2>
     <div class="sequence-grid">
-      <article class="sequence-card"><h3>Méthodologie</h3><p>40 questions pour comprendre les consignes et lire les documents.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-methodologie/accueil">Commencer</a></article>
-      <article class="sequence-card"><h3>Grammaire</h3><p>72 questions sur la phrase, le verbe, le sujet et les accords.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-grammaire/accueil">Commencer</a></article>
-      <article class="sequence-card"><h3>Conjugaison et temps</h3><p>56 questions sur le présent, le passé et le futur.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-conjugaison/accueil">Commencer</a></article>
-      <article class="sequence-card"><h3>Cohésion et liens logiques</h3><p>56 questions pour relier les phrases et construire un paragraphe.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-cohesion/accueil">Commencer</a></article>
-      <article class="sequence-card"><h3>Vocabulaire</h3><p>64 questions sur les familles de mots et le lexique utile.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-vocabulaire/accueil">Commencer</a></article>
-      <article class="sequence-card"><h3>Écriture et communication</h3><p>64 questions pour écrire des messages clairs et adaptés.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-ecriture/accueil">Commencer</a></article>
-      <article class="sequence-card"><h3>Se corriger</h3><p>64 questions pour relire et corriger ses écrits.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-correction/accueil">Commencer</a></article>
-      <article class="sequence-card"><h3>Oral</h3><p>40 questions pour se présenter, raconter et expliquer.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-oral/accueil">Commencer</a></article>
-      <article class="sequence-card"><h3>Préparation aux épreuves</h3><p>80 questions pour analyser, rédiger, gérer son temps et préparer l’oral.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-epreuves/accueil">Commencer</a></article>
+      <article class="sequence-card"><h3>Méthodologie</h3><p>40 questions pour comprendre les consignes et lire les documents.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-methodologie/demarrer">Commencer</a></article>
+      <article class="sequence-card"><h3>Grammaire</h3><p>72 questions sur la phrase, le verbe, le sujet et les accords.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-grammaire/demarrer">Commencer</a></article>
+      <article class="sequence-card"><h3>Conjugaison et temps</h3><p>56 questions sur le présent, le passé et le futur.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-conjugaison/demarrer">Commencer</a></article>
+      <article class="sequence-card"><h3>Cohésion et liens logiques</h3><p>56 questions pour relier les phrases et construire un paragraphe.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-cohesion/demarrer">Commencer</a></article>
+      <article class="sequence-card"><h3>Vocabulaire</h3><p>64 questions sur les familles de mots et le lexique utile.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-vocabulaire/demarrer">Commencer</a></article>
+      <article class="sequence-card"><h3>Écriture et communication</h3><p>64 questions pour écrire des messages clairs et adaptés.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-ecriture/demarrer">Commencer</a></article>
+      <article class="sequence-card"><h3>Se corriger</h3><p>64 questions pour relire et corriger ses écrits.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-correction/demarrer">Commencer</a></article>
+      <article class="sequence-card"><h3>Oral</h3><p>40 questions pour se présenter, raconter et expliquer.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-oral/demarrer">Commencer</a></article>
+      <article class="sequence-card"><h3>Préparation aux épreuves</h3><p>80 questions pour analyser, rédiger, gérer son temps et préparer l’oral.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-epreuves/demarrer">Commencer</a></article>
     </div>
   </section>"""
         title = f"Mon espace {level}"

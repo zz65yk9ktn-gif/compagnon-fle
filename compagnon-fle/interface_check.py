@@ -22,6 +22,9 @@ for marker in ['role="group"', 'aria-label="Réponses proposées"', 'aria-live="
 for marker in ['notice-error" role="alert"', 'aria-describedby="password-rules"', 'id="password-rules"']:
     assert marker in server_text, marker
 
+assert 'sequence-soutien-methodologie/demarrer">Commencer</a>' in server_text
+assert "sequence-soutien-methodologie/accueil\">Commencer</a>" not in server_text
+
 spec = importlib.util.spec_from_file_location('sequence_views', ROOT / 'sequence_views.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
