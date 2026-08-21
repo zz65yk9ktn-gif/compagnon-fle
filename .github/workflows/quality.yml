@@ -1,0 +1,39 @@
+name: Contrôles Compagnon FLE
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compagnon-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Parcours et sécurité
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: compagnon-fle
+    env:
+      DATABASE_PATH: ${{ runner.temp }}/compagnon-fle-check.sqlite3
+      APP_ENV: test
+    steps:
+      - name: Récupérer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Vérifier tous les parcours
+        run: python3 deployment_check.py
+
+      - name: Vérifier les protections de sécurité
+        run: python3 security_check.py
