@@ -89,7 +89,10 @@ def main():
                 "csrf_token": csrf, "current_password": temporary,
                 "new_password": "NewLearnerPassword456", "confirmation": "NewLearnerPassword456",
             }, cookie)
-            assert status == 303 and headers["Location"] == "/espace-apprenant"
+            assert status == 303 and headers["Location"] == "/connexion"
+            assert "Max-Age=0" in headers["Set-Cookie"]
+            status, _, _ = request(port, "GET", "/espace-apprenant", cookie=cookie)
+            assert status == 401
             assert database.authenticate_learner("eleve-test", "NewLearnerPassword456")
             assert not database.authenticate_learner("eleve-test", temporary)
         finally:
