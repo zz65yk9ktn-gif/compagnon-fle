@@ -15,7 +15,7 @@ DATABASE_PATH = Path(
 ).expanduser()
 LEVELS = ("A0", "A1", "A2", "B1", "B2")
 PASSWORD_ITERATIONS = 310_000
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 ROLES = ("learner", "teacher", "admin")
 STAFF_ROLES = ("teacher", "admin")
 ROLE_PERMISSIONS = {
@@ -59,6 +59,18 @@ def initialize_database() -> None:
                 role TEXT NOT NULL CHECK (role IN ('learner', 'admin')),
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS password_reset_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'completed')),
+                requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at TEXT NULL,
+                completed_by INTEGER NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (completed_by) REFERENCES users(id) ON DELETE SET NULL
             );
 
             CREATE TABLE IF NOT EXISTS learner_profiles (
@@ -169,6 +181,8 @@ def initialize_database() -> None:
                     password_hash TEXT NOT NULL,
                     role TEXT NOT NULL CHECK (role IN ('learner', 'teacher', 'admin')),
                     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+                    must_change_password INTEGER NOT NULL DEFAULT 0
+                        CHECK (must_change_password IN (0, 1)),
                     disabled_at TEXT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -180,8 +194,9 @@ def initialize_database() -> None:
             database.execute(
                 f"""
                 INSERT INTO users_new
-                    (id, login, password_hash, role, is_active, disabled_at, created_at, updated_at)
-                SELECT id, login, password_hash, role, {active_expr}, {disabled_expr},
+                    (id, login, password_hash, role, is_active, must_change_password,
+                     disabled_at, created_at, updated_at)
+                SELECT id, login, password_hash, role, {active_expr}, 0, {disabled_expr},
                        created_at, updated_at
                 FROM users
                 """
@@ -191,6 +206,17 @@ def initialize_database() -> None:
             database.execute("PRAGMA foreign_keys = ON")
             database.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
             database.execute("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active, role)")
+
+        user_columns = {row["name"] for row in database.execute("PRAGMA table_info(users)")}
+        if "must_change_password" not in user_columns:
+            database.execute(
+                "ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0 "
+                "CHECK (must_change_password IN (0, 1))"
+            )
+        database.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_password_reset_pending "
+            "ON password_reset_requests(user_id) WHERE status = 'pending'"
+        )
 
         profile_columns = {
             row["name"] for row in database.execute("PRAGMA table_info(learner_profiles)")
@@ -235,6 +261,10 @@ def initialize_database() -> None:
         database.execute(
             "INSERT OR IGNORE INTO schema_migrations(version, description) VALUES (?, ?)",
             (3, "Rôles administrateur, enseignant et apprenant ; activation des comptes"),
+        )
+        database.execute(
+            "INSERT OR IGNORE INTO schema_migrations(version, description) VALUES (?, ?)",
+            (4, "Demandes de réinitialisation et changement obligatoire du mot de passe"),
         )
         database.execute(
             """
@@ -380,7 +410,7 @@ def create_teacher(login: str, password: str) -> int:
 def authenticate_user(login: str, password: str, *, allowed_roles=ROLES):
     with connect() as database:
         user = database.execute(
-            "SELECT id, login, password_hash, role, is_active FROM users WHERE login = ?",
+            "SELECT id, login, password_hash, role, is_active, must_change_password FROM users WHERE login = ?",
             (normalize_login(login),),
         ).fetchone()
     if not user or not user["is_active"] or user["role"] not in allowed_roles:
@@ -408,6 +438,7 @@ def authenticate_learner(login: str, password: str):
         return database.execute(
             """
             SELECT users.id, users.login, users.password_hash, users.role, users.is_active,
+                   users.must_change_password,
                    learner_profiles.first_name, learner_profiles.registration_status,
                    learner_profiles.activity_access_enabled, learner_profiles.assigned_level
             FROM users
@@ -439,8 +470,68 @@ def reset_learner_password(*, learner_id: int, new_password: str, actor_id: int)
         ):
             return False
         database.execute(
-            "UPDATE users SET password_hash = ? WHERE id = ?",
+            "UPDATE users SET password_hash = ?, must_change_password = 1, "
+            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (hash_password(new_password), learner_id),
+        )
+        database.execute(
+            "UPDATE password_reset_requests SET status = 'completed', "
+            "completed_at = CURRENT_TIMESTAMP, completed_by = ? "
+            "WHERE user_id = ? AND status = 'pending'",
+            (actor_id, learner_id),
+        )
+        return True
+
+
+def request_learner_password_reset(login: str) -> None:
+    """Create at most one pending request without revealing whether the login exists."""
+    with connect() as database:
+        user = database.execute(
+            "SELECT id FROM users WHERE login = ? AND role = 'learner' AND is_active = 1",
+            (normalize_login(login),),
+        ).fetchone()
+        if user:
+            database.execute(
+                "INSERT OR IGNORE INTO password_reset_requests(user_id) VALUES (?)",
+                (user["id"],),
+            )
+
+
+def list_pending_password_resets():
+    with connect() as database:
+        return database.execute(
+            """
+            SELECT password_reset_requests.id, password_reset_requests.requested_at,
+                   users.id AS learner_id, users.login, learner_profiles.first_name,
+                   learner_profiles.class_name
+            FROM password_reset_requests
+            JOIN users ON users.id = password_reset_requests.user_id
+            JOIN learner_profiles ON learner_profiles.user_id = users.id
+            WHERE password_reset_requests.status = 'pending'
+            ORDER BY password_reset_requests.requested_at ASC
+            """
+        ).fetchall()
+
+
+def change_user_password(*, user_id: int, current_password: str, new_password: str) -> bool:
+    if (
+        len(new_password) < 12
+        or not any(c.isalpha() for c in new_password)
+        or not any(c.isdigit() for c in new_password)
+    ):
+        return False
+    with connect() as database:
+        user = database.execute(
+            "SELECT password_hash, is_active FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if not user or not user["is_active"] or not verify_password(current_password, user["password_hash"]):
+            return False
+        if verify_password(new_password, user["password_hash"]):
+            return False
+        database.execute(
+            "UPDATE users SET password_hash = ?, must_change_password = 0, "
+            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (hash_password(new_password), user_id),
         )
         return True
 

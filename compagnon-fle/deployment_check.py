@@ -13,6 +13,7 @@ CHECKS = [
     "exercise_framework_check.py",
     "interface_check.py",
     "navigation_check.py",
+    "password_flow_check.py",
 ]
 
 
