@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 from database import (
     LEVELS,
+    MAX_PASSWORD_LENGTH,
     assign_level,
     authenticate_staff,
     authenticate_learner,
@@ -157,8 +158,8 @@ def registration_page(message: str = "", error: bool = False) -> str:
     <label>Date de naissance<input type="date" name="birth_date" required></label>
     <label>Classe<input name="class_name" required maxlength="100" placeholder="Ex. CAP 1 EPC"></label>
     <label>Identifiant de connexion<input name="login" required minlength="3" maxlength="80" autocomplete="username"></label>
-    <label>Mot de passe<input type="password" name="password" required minlength="12" autocomplete="new-password"></label>
-    <label>Confirmer le mot de passe<input type="password" name="confirmation" required minlength="12" autocomplete="new-password"></label>
+    <label>Mot de passe<input type="password" name="password" required minlength="12" maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="new-password"></label>
+    <label>Confirmer le mot de passe<input type="password" name="confirmation" required minlength="12" maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="new-password"></label>
     <button type="submit">Créer l’inscription</button>
   </form>
 </section>""",
@@ -175,7 +176,7 @@ def admin_login_page(message: str = "") -> str:
   {notice}
   <form method="post" action="/administration/connexion" class="form-grid">
     <label>Identifiant<input name="login" required autocomplete="username"></label>
-    <label>Mot de passe<input type="password" name="password" required autocomplete="current-password"></label>
+    <label>Mot de passe<input type="password" name="password" required maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="current-password"></label>
     <button type="submit">Se connecter</button>
   </form>
   <p class="form-help"><a href="/mot-de-passe-oublie?compte=administration">Mot de passe oublié ?</a></p>
@@ -194,7 +195,7 @@ def learner_login_page(message: str = "") -> str:
   {notice}
   <form method="post" action="/connexion/apprenant" class="form-grid">
     <label>Identifiant<input name="login" required autocomplete="username"></label>
-    <label>Mot de passe<input type="password" name="password" required autocomplete="current-password"></label>
+    <label>Mot de passe<input type="password" name="password" required maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="current-password"></label>
     <button type="submit">Accéder à mon espace</button>
   </form>
   <p class="form-help"><a href="/mot-de-passe-oublie">Mot de passe oublié ?</a></p>
@@ -240,10 +241,10 @@ def change_password_page(session: dict, message: str = "", error: bool = False) 
   {required}{notice}
   <form method="post" action="/mot-de-passe" class="form-grid">
     <input type="hidden" name="csrf_token" value="{esc(session['csrf'])}">
-    <label>Mot de passe actuel<input type="password" name="current_password" required autocomplete="current-password"></label>
-    <label>Nouveau mot de passe<input type="password" name="new_password" required minlength="12" autocomplete="new-password"></label>
-    <label>Confirmer le nouveau mot de passe<input type="password" name="confirmation" required minlength="12" autocomplete="new-password"></label>
-    <p class="password-rules">12 caractères minimum, avec au moins une lettre et un chiffre.</p>
+    <label>Mot de passe actuel<input type="password" name="current_password" required maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="current-password"></label>
+    <label>Nouveau mot de passe<input type="password" name="new_password" required minlength="12" maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="new-password"></label>
+    <label>Confirmer le nouveau mot de passe<input type="password" name="confirmation" required minlength="12" maxlength="{MAX_PASSWORD_LENGTH}" autocomplete="new-password"></label>
+    <p class="password-rules">Entre 12 et {MAX_PASSWORD_LENGTH} caractères, avec au moins une lettre et un chiffre.</p>
     <button type="submit">Enregistrer le nouveau mot de passe</button>
   </form>
   {'' if session.get('must_change_password') else f'<p class="form-help"><a href="{back}">Retour</a></p>'}
@@ -712,12 +713,13 @@ class AppHandler(SimpleHTTPRequestHandler):
             return self.send_html(registration_page("Tous les champs sont obligatoires.", True), 400)
         if (
             len(data["password"]) < 12
+            or len(data["password"]) > MAX_PASSWORD_LENGTH
             or not any(character.isalpha() for character in data["password"])
             or not any(character.isdigit() for character in data["password"])
         ):
             return self.send_html(
                 registration_page(
-                    "Le mot de passe doit contenir au moins 12 caractères, avec des lettres et des chiffres.",
+                    f"Le mot de passe doit contenir entre 12 et {MAX_PASSWORD_LENGTH} caractères, avec des lettres et des chiffres.",
                     True,
                 ),
                 400,
@@ -899,8 +901,8 @@ class AppHandler(SimpleHTTPRequestHandler):
         new_password = data.get("new_password", "")
         if new_password != data.get("confirmation", ""):
             return self.send_html(change_password_page(session, "Les nouveaux mots de passe ne correspondent pas.", True), 400)
-        if len(new_password) < 12 or not any(c.isalpha() for c in new_password) or not any(c.isdigit() for c in new_password):
-            return self.send_html(change_password_page(session, "Le nouveau mot de passe doit contenir au moins 12 caractères, avec des lettres et des chiffres.", True), 400)
+        if len(new_password) < 12 or len(new_password) > MAX_PASSWORD_LENGTH or not any(c.isalpha() for c in new_password) or not any(c.isdigit() for c in new_password):
+            return self.send_html(change_password_page(session, f"Le nouveau mot de passe doit contenir entre 12 et {MAX_PASSWORD_LENGTH} caractères, avec des lettres et des chiffres.", True), 400)
         user_id = session.get("learner_id") or session.get("admin_id")
         if not change_user_password(
             user_id=user_id,

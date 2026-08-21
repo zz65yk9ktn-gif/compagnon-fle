@@ -32,6 +32,7 @@ def static_checks() -> None:
         "MAX_LOGIN_FAILURES",
         "MAX_PASSWORD_RESET_REQUESTS_PER_IP",
         "invalidate_user_sessions",
+        "MAX_PASSWORD_LENGTH",
     ]
     for marker in required:
         require(marker in text, f"Protection absente : {marker}")
