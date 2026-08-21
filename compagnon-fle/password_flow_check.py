@@ -73,6 +73,7 @@ def main():
                 "class_name": "CAP", "login": "nouvel-eleve",
             })
             assert status == 200 and "Inscription enregistrée" in body
+            assert "mot de passe commun" in body
             assert database.authenticate_learner("nouvel-eleve", "Compagnon2026")
 
             status, _, body = request(port, "POST", "/connexion/apprenant", {
