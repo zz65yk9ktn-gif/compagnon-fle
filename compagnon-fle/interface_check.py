@@ -12,6 +12,8 @@ required_css = [
     '.choice:has(input:checked)',
     'touch-action: manipulation',
     '@media (max-width: 540px)',
+    '.sequence-grid',
+    'grid-template-columns: repeat(auto-fit, minmax(240px, 1fr))',
 ]
 for marker in required_css:
     assert marker in css, marker
