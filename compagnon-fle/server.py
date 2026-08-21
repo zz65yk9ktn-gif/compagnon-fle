@@ -41,6 +41,7 @@ from sequence_views import feedback_page, question_page, question_title, result_
 from support import SUPPORT_METHODOLOGY
 from support_grammar import SUPPORT_GRAMMAR
 from support_conjugation import SUPPORT_CONJUGATION
+from support_cohesion import SUPPORT_COHESION
 
 
 validate_question_bank(SEQUENCE_1)
@@ -67,6 +68,7 @@ SUPPORT_SEQUENCES = {
     SUPPORT_METHODOLOGY["slug"]: SUPPORT_METHODOLOGY,
     SUPPORT_GRAMMAR["slug"]: SUPPORT_GRAMMAR,
     SUPPORT_CONJUGATION["slug"]: SUPPORT_CONJUGATION,
+    SUPPORT_COHESION["slug"]: SUPPORT_COHESION,
 }
 
 
@@ -281,6 +283,7 @@ def learner_space_page(learner) -> str:
       <article class="sequence-card"><h3>Méthodologie</h3><p>40 questions pour comprendre les consignes et lire les documents.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-methodologie/accueil">Commencer</a></article>
       <article class="sequence-card"><h3>Grammaire</h3><p>72 questions sur la phrase, le verbe, le sujet et les accords.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-grammaire/accueil">Commencer</a></article>
       <article class="sequence-card"><h3>Conjugaison et temps</h3><p>56 questions sur le présent, le passé et le futur.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-conjugaison/accueil">Commencer</a></article>
+      <article class="sequence-card"><h3>Cohésion et liens logiques</h3><p>56 questions pour relier les phrases et construire un paragraphe.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-cohesion/accueil">Commencer</a></article>
     </div>
   </section>"""
         title = f"Mon espace {level}"
