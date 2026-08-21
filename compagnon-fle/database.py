@@ -456,6 +456,22 @@ def authenticate_learner(login: str, password: str):
         ).fetchone()
 
 
+def get_active_learner_by_login(login: str):
+    with connect() as database:
+        return database.execute(
+            """
+            SELECT users.id, users.login, users.password_hash, users.role, users.is_active,
+                   0 AS must_change_password,
+                   learner_profiles.first_name, learner_profiles.registration_status,
+                   learner_profiles.activity_access_enabled, learner_profiles.assigned_level
+            FROM users
+            JOIN learner_profiles ON learner_profiles.user_id = users.id
+            WHERE users.login = ? AND users.role = 'learner' AND users.is_active = 1
+            """,
+            (normalize_login(login),),
+        ).fetchone()
+
+
 
 def reset_learner_password(*, learner_id: int, new_password: str, actor_id: int) -> bool:
     if len(new_password) < 12 or len(new_password) > MAX_PASSWORD_LENGTH or not any(c.isalpha() for c in new_password) or not any(c.isdigit() for c in new_password):
