@@ -61,7 +61,7 @@ def question_page(layout, learner, csrf_token: str, run, sequence, question, mes
     return layout(
         sequence["title"],
         f"""<section class="sequence-section one-question">
-  <div class="section-heading"><div><p class="eyebrow">Niveau {esc(run['level'])}</p><h1>{esc(sequence['title'])}</h1></div><a href="/espace-apprenant/{sequence['slug']}/accueil">Retour à la séquence</a></div>
+  <div class="section-heading"><div><p class="eyebrow">{'Soutien · niveau commun' if sequence.get('track') == 'support' else f'Niveau {esc(run["level"])}'}</p><h1>{esc(sequence['title'])}</h1></div><a href="/espace-apprenant/{sequence['slug']}/accueil">Retour à la série</a></div>
   <div class="progress-label"><span>Question {number} sur {run['total_questions']}</span><span>{progress} %</span></div>
   <div class="progress-bar" aria-label="Progression"><span style="width:{progress}%"></span></div>
   {notice}
@@ -123,13 +123,13 @@ def result_page(layout, learner, run, sequence) -> str:
     return layout(
         f"Résultat · {sequence['title']}",
         f"""<section class="card result-card" aria-live="polite" tabindex="-1">
-  <p class="eyebrow">{esc(sequence['title'])} · Niveau {esc(run['level'])}</p>
+  <p class="eyebrow">{esc(sequence['title'])} · {'Niveau commun' if sequence.get('track') == 'support' else f'Niveau {esc(run["level"])}'}</p>
   <h1>Ma série est terminée</h1>
   <div class="score-circle"><strong>{percentage} %</strong><span>de réussite automatique</span></div>
   <p><strong>{success} bonne(s) réponse(s) sur {evaluated} question(s) corrigée(s) automatiquement.</strong></p>
   <p>{run['manual_review_count']} production(s) à examiner par l’enseignant.{esc(provisional)}</p>
   <div class="recommendation"><strong>Recommandation pédagogique</strong><p>{esc(recommendation['label'])}</p></div>
-  <p>Le niveau officiel reste <strong>{esc(run['level'])}</strong>. Seul l’administrateur peut le modifier.</p>
+  {'' if sequence.get('track') == 'support' else f'<p>Le niveau officiel reste <strong>{esc(run["level"])}</strong>. Seul l’administrateur peut le modifier.</p>'}
   <div class="result-actions"><a class="primary-link" href="{base}/demarrer?nouvelle=1">Commencer une nouvelle série</a><a href="/espace-apprenant">Retour à mon espace</a></div>
 </section>""",
     )
