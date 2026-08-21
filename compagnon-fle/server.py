@@ -44,6 +44,7 @@ from support_conjugation import SUPPORT_CONJUGATION
 from support_cohesion import SUPPORT_COHESION
 from support_vocabulary import SUPPORT_VOCABULARY
 from support_writing import SUPPORT_WRITING
+from support_correction import SUPPORT_CORRECTION
 
 
 validate_question_bank(SEQUENCE_1)
@@ -73,6 +74,7 @@ SUPPORT_SEQUENCES = {
     SUPPORT_COHESION["slug"]: SUPPORT_COHESION,
     SUPPORT_VOCABULARY["slug"]: SUPPORT_VOCABULARY,
     SUPPORT_WRITING["slug"]: SUPPORT_WRITING,
+    SUPPORT_CORRECTION["slug"]: SUPPORT_CORRECTION,
 }
 
 
@@ -290,6 +292,7 @@ def learner_space_page(learner) -> str:
       <article class="sequence-card"><h3>Cohésion et liens logiques</h3><p>56 questions pour relier les phrases et construire un paragraphe.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-cohesion/accueil">Commencer</a></article>
       <article class="sequence-card"><h3>Vocabulaire</h3><p>64 questions sur les familles de mots et le lexique utile.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-vocabulaire/accueil">Commencer</a></article>
       <article class="sequence-card"><h3>Écriture et communication</h3><p>64 questions pour écrire des messages clairs et adaptés.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-ecriture/accueil">Commencer</a></article>
+      <article class="sequence-card"><h3>Se corriger</h3><p>64 questions pour relire et corriger ses écrits.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-correction/accueil">Commencer</a></article>
     </div>
   </section>"""
         title = f"Mon espace {level}"
