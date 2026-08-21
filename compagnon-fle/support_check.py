@@ -98,7 +98,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 target = "/espace-apprenant/sequence-soutien-methodologie/resultat" if index == 39 else "/espace-apprenant/sequence-soutien-methodologie/demarrer"
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
-            assert "100 %" in page and "40 bonne(s) réponse(s)" in page and "Niveau commun" in page
+            assert "100 %" in page and "40 bonnes réponses" in page and "Niveau commun" in page
 
             start = "/espace-apprenant/sequence-soutien-epreuves/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -117,7 +117,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 target = "/espace-apprenant/sequence-soutien-epreuves/resultat" if index == 79 else "/espace-apprenant/sequence-soutien-epreuves/demarrer"
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
-            assert "100 %" in page and "80 bonne(s) réponse(s)" in page and "Niveau commun" in page
+            assert "100 %" in page and "80 bonnes réponses" in page and "Niveau commun" in page
 
             start = "/espace-apprenant/sequence-soutien-grammaire/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -136,7 +136,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 target = "/espace-apprenant/sequence-soutien-grammaire/resultat" if index == 71 else "/espace-apprenant/sequence-soutien-grammaire/demarrer"
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
-            assert "100 %" in page and "72 bonne(s) réponse(s)" in page and "Niveau commun" in page
+            assert "100 %" in page and "72 bonnes réponses" in page and "Niveau commun" in page
 
             start = "/espace-apprenant/sequence-soutien-conjugaison/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -155,7 +155,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 target = "/espace-apprenant/sequence-soutien-conjugaison/resultat" if index == 55 else "/espace-apprenant/sequence-soutien-conjugaison/demarrer"
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
-            assert "100 %" in page and "56 bonne(s) réponse(s)" in page and "Niveau commun" in page
+            assert "100 %" in page and "56 bonnes réponses" in page and "Niveau commun" in page
 
             start = "/espace-apprenant/sequence-soutien-vocabulaire/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -174,7 +174,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 target = "/espace-apprenant/sequence-soutien-vocabulaire/resultat" if index == 63 else "/espace-apprenant/sequence-soutien-vocabulaire/demarrer"
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
-            assert "100 %" in page and "64 bonne(s) réponse(s)" in page and "Niveau commun" in page
+            assert "100 %" in page and "64 bonnes réponses" in page and "Niveau commun" in page
 
             start = "/espace-apprenant/sequence-soutien-oral/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -193,7 +193,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 target = "/espace-apprenant/sequence-soutien-oral/resultat" if index == 39 else "/espace-apprenant/sequence-soutien-oral/demarrer"
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
-            assert "100 %" in page and "40 bonne(s) réponse(s)" in page and "Niveau commun" in page
+            assert "100 %" in page and "40 bonnes réponses" in page and "Niveau commun" in page
 
             start = "/espace-apprenant/sequence-soutien-correction/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -212,7 +212,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 target = "/espace-apprenant/sequence-soutien-correction/resultat" if index == 63 else "/espace-apprenant/sequence-soutien-correction/demarrer"
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
-            assert "100 %" in page and "64 bonne(s) réponse(s)" in page and "Niveau commun" in page
+            assert "100 %" in page and "64 bonnes réponses" in page and "Niveau commun" in page
 
             start = "/espace-apprenant/sequence-soutien-ecriture/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -231,7 +231,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 target = "/espace-apprenant/sequence-soutien-ecriture/resultat" if index == 63 else "/espace-apprenant/sequence-soutien-ecriture/demarrer"
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
-            assert "100 %" in page and "64 bonne(s) réponse(s)" in page and "Niveau commun" in page
+            assert "100 %" in page and "64 bonnes réponses" in page and "Niveau commun" in page
 
             start = "/espace-apprenant/sequence-soutien-cohesion/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -250,7 +250,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 target = "/espace-apprenant/sequence-soutien-cohesion/resultat" if index == 55 else "/espace-apprenant/sequence-soutien-cohesion/demarrer"
                 status, _, page = request(port, "GET", target, cookie=cookie)
                 assert status == 200
-            assert "100 %" in page and "56 bonne(s) réponse(s)" in page and "Niveau commun" in page
+            assert "100 %" in page and "56 bonnes réponses" in page and "Niveau commun" in page
         finally:
             process.terminate()
             process.wait(timeout=5)
