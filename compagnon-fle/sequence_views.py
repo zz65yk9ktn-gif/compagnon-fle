@@ -119,18 +119,25 @@ def result_page(layout, learner, run, sequence) -> str:
     percentage = run["score_percentage"] if run["score_percentage"] is not None else 0
     recommendation = recommendation_for_percentage(percentage)
     provisional = " Résultat automatique provisoire : les productions ouvertes restent à examiner." if run["manual_review_count"] else ""
+    answer_label = "bonne réponse" if success == 1 else "bonnes réponses"
+    question_label = "question" if evaluated == 1 else "questions"
+    manual_line = (
+        f"<p>{run['manual_review_count']} production(s) à examiner par l’enseignant.{esc(provisional)}</p>"
+        if run["manual_review_count"]
+        else ""
+    )
     base = f'/espace-apprenant/{sequence["slug"]}'
     return layout(
         f"Résultat · {sequence['title']}",
         f"""<section class="card result-card" aria-live="polite" tabindex="-1">
   <p class="eyebrow">{esc(sequence['title'])} · {'Niveau commun' if sequence.get('track') == 'support' else f'Niveau {esc(run["level"])}'}</p>
   <h1>Ma série est terminée</h1>
-  <div class="score-circle"><strong>{percentage} %</strong><span>de réussite automatique</span></div>
-  <p><strong>{success} bonne(s) réponse(s) sur {evaluated} question(s) corrigée(s) automatiquement.</strong></p>
-  <p>{run['manual_review_count']} production(s) à examiner par l’enseignant.{esc(provisional)}</p>
-  <div class="recommendation"><strong>Recommandation pédagogique</strong><p>{esc(recommendation['label'])}</p></div>
+  <div class="score-circle"><strong>{percentage} %</strong><span>de réussite</span></div>
+  <p><strong>{success} {answer_label} sur {evaluated} {question_label}.</strong></p>
+  {manual_line}
+  <div class="recommendation"><strong>Conseil</strong><p>{esc(recommendation['label'])}</p></div>
   {'' if sequence.get('track') == 'support' else f'<p>Le niveau officiel reste <strong>{esc(run["level"])}</strong>. Seul l’administrateur peut le modifier.</p>'}
-  <div class="result-actions"><a class="primary-link" href="{base}/demarrer?nouvelle=1">Commencer une nouvelle série</a><a href="/espace-apprenant">Retour à mon espace</a></div>
+  <div class="result-actions"><a class="primary-link" href="{base}/demarrer?nouvelle=1">Recommencer</a><a href="/espace-apprenant">Mon espace</a></div>
 </section>""",
     )
 
