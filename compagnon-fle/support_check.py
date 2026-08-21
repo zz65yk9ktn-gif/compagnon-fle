@@ -77,6 +77,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
             assert "Cohésion et liens logiques" in dashboard
             assert "64 questions" in dashboard and "Vocabulaire" in dashboard
             assert "Écriture et communication" in dashboard
+            assert "Se corriger" in dashboard
 
             start = "/espace-apprenant/sequence-soutien-methodologie/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
@@ -154,6 +155,25 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
                 assert status == 200
             assert "100 %" in page and "64 bonne(s) réponse(s)" in page and "Niveau commun" in page
 
+            start = "/espace-apprenant/sequence-soutien-correction/demarrer?nouvelle=1"
+            status, _, page = request(port, "GET", start, cookie=cookie)
+            assert status == 200 and "Soutien · niveau commun" in page
+            from support_correction import SUPPORT_CORRECTION_QUESTIONS
+            for index in range(64):
+                question_id = value(page, "question_id")
+                run_id = value(page, "run_id")
+                csrf = value(page, "csrf_token")
+                question = next(item for item in SUPPORT_CORRECTION_QUESTIONS if item["id"] == question_id)
+                status, _, feedback = request(port, "POST", "/espace-apprenant/sequence-soutien-correction/demarrer", {
+                    "csrf_token": csrf, "run_id": run_id, "question_id": question_id,
+                    "answer": question["correct_answer"],
+                }, cookie)
+                assert status == 200 and "Bravo, c’est juste" in feedback
+                target = "/espace-apprenant/sequence-soutien-correction/resultat" if index == 63 else "/espace-apprenant/sequence-soutien-correction/demarrer"
+                status, _, page = request(port, "GET", target, cookie=cookie)
+                assert status == 200
+            assert "100 %" in page and "64 bonne(s) réponse(s)" in page and "Niveau commun" in page
+
             start = "/espace-apprenant/sequence-soutien-ecriture/demarrer?nouvelle=1"
             status, _, page = request(port, "GET", start, cookie=cookie)
             assert status == 200 and "Soutien · niveau commun" in page
@@ -194,7 +214,7 @@ assert database.assign_level(learner_id=learner_id, level='A0', admin_id=admin_i
         finally:
             process.terminate()
             process.wait(timeout=5)
-    print("SUPPORT_CHECK_OK (352 questions)")
+    print("SUPPORT_CHECK_OK (416 questions)")
 
 
 if __name__ == "__main__":
