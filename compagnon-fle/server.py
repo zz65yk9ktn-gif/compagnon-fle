@@ -39,6 +39,7 @@ from sequence_1 import SEQUENCE_1
 from sequences import SEQUENCES, sequence_by_slug
 from sequence_views import feedback_page, question_page, question_title, result_page
 from support import SUPPORT_METHODOLOGY
+from support_grammar import SUPPORT_GRAMMAR
 
 
 validate_question_bank(SEQUENCE_1)
@@ -60,6 +61,11 @@ PRODUCTION = os.environ.get("APP_ENV", "development").lower() == "production"
 SECURE_COOKIES = os.environ.get(
     "SECURE_COOKIES", "true" if PRODUCTION else "false"
 ).lower() == "true"
+
+SUPPORT_SEQUENCES = {
+    SUPPORT_METHODOLOGY["slug"]: SUPPORT_METHODOLOGY,
+    SUPPORT_GRAMMAR["slug"]: SUPPORT_GRAMMAR,
+}
 
 
 def esc(value) -> str:
@@ -268,9 +274,11 @@ def learner_space_page(learner) -> str:
   {pilot}
   <section class="support-area">
     <p class="eyebrow">Soutien en français · niveau commun</p>
-    <h2>Méthodologie</h2>
-    <p>40 questions courtes pour comprendre les consignes et mieux lire les documents.</p>
-    <a class="primary-link" href="/espace-apprenant/sequence-soutien-methodologie/accueil">Commencer le soutien</a>
+    <h2>Mes séries de soutien</h2>
+    <div class="sequence-grid">
+      <article class="sequence-card"><h3>Méthodologie</h3><p>40 questions pour comprendre les consignes et lire les documents.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-methodologie/accueil">Commencer</a></article>
+      <article class="sequence-card"><h3>Grammaire</h3><p>72 questions sur la phrase, le verbe, le sujet et les accords.</p><a class="primary-link" href="/espace-apprenant/sequence-soutien-grammaire/accueil">Commencer</a></article>
+    </div>
   </section>"""
         title = f"Mon espace {level}"
     return layout(
@@ -577,9 +585,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             explicit_action = parts[-1] if parts[-1] in {"accueil", "demarrer", "resultat"} else None
             action = explicit_action or "accueil"
             slug = parts[-2] if explicit_action else parts[-1]
-            sequence = sequence_by_slug(slug) or (
-                SUPPORT_METHODOLOGY if slug == SUPPORT_METHODOLOGY["slug"] else None
-            )
+            sequence = sequence_by_slug(slug) or SUPPORT_SEQUENCES.get(slug)
             if sequence and not explicit_action:
                 return self.redirect(f"/espace-apprenant/{sequence['slug']}/accueil")
             if sequence:
@@ -686,9 +692,7 @@ class AppHandler(SimpleHTTPRequestHandler):
         if path.startswith("/espace-apprenant/sequence-"):
             parts = path.rstrip("/").split("/")
             slug = parts[-2] if parts[-1] == "demarrer" else parts[-1]
-            sequence = sequence_by_slug(slug) or (
-                SUPPORT_METHODOLOGY if slug == SUPPORT_METHODOLOGY["slug"] else None
-            )
+            sequence = sequence_by_slug(slug) or SUPPORT_SEQUENCES.get(slug)
             if sequence:
                 return self.handle_sequence_submission(data, sequence)
         self.send_error(404)
