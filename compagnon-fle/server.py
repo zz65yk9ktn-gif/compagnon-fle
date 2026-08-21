@@ -38,6 +38,7 @@ from exercise_engine import evaluate_answer, recommendation_for_percentage, vali
 from sequence_1 import SEQUENCE_1
 from sequences import SEQUENCES, sequence_by_slug
 from sequence_views import feedback_page, question_page, question_title, result_page
+from support import SUPPORT_METHODOLOGY
 
 
 validate_question_bank(SEQUENCE_1)
@@ -129,8 +130,8 @@ def sequence_overview_page(learner, sequence, active_run=None) -> str:
     return layout(
         sequence["title"],
         f"""<section class="card sequence-overview">
-  <div class="section-heading"><div><p class="eyebrow">Niveau {esc(level)}</p><h1>{esc(sequence['title'])}</h1></div><a href="/espace-apprenant">Retour au tableau de bord</a></div>
-  <p class="introduction">Cette séquence comporte {total} questions. La progression est enregistrée automatiquement.</p>
+  <div class="section-heading"><div><p class="eyebrow">{'Soutien · niveau commun' if sequence.get('track') == 'support' else f'Niveau {esc(level)}'}</p><h1>{esc(sequence['title'])}</h1></div><a href="/espace-apprenant">Retour au tableau de bord</a></div>
+  <p class="introduction">Cette série comporte {total} questions. La progression est enregistrée automatiquement.</p>
   <a class="primary-link" href="/espace-apprenant/{esc(sequence['slug'])}/demarrer">{esc(action)}</a>
 </section>""",
     )
@@ -264,7 +265,13 @@ def learner_space_page(learner) -> str:
         pilot = '<div class="sequence-grid">' + "".join(sequence_cards) + "</div>"
         content = f"""<p class="level-badge">Niveau {level}</p>
   <p class="introduction">Votre accès est limité à l’espace correspondant au niveau {level}.</p>
-  {pilot}"""
+  {pilot}
+  <section class="support-area">
+    <p class="eyebrow">Soutien en français · niveau commun</p>
+    <h2>Méthodologie</h2>
+    <p>40 questions courtes pour comprendre les consignes et mieux lire les documents.</p>
+    <a class="primary-link" href="/espace-apprenant/sequence-soutien-methodologie/accueil">Commencer le soutien</a>
+  </section>"""
         title = f"Mon espace {level}"
     return layout(
         "Espace apprenant",
@@ -570,7 +577,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             explicit_action = parts[-1] if parts[-1] in {"accueil", "demarrer", "resultat"} else None
             action = explicit_action or "accueil"
             slug = parts[-2] if explicit_action else parts[-1]
-            sequence = sequence_by_slug(slug)
+            sequence = sequence_by_slug(slug) or (
+                SUPPORT_METHODOLOGY if slug == SUPPORT_METHODOLOGY["slug"] else None
+            )
             if sequence and not explicit_action:
                 return self.redirect(f"/espace-apprenant/{sequence['slug']}/accueil")
             if sequence:
@@ -677,7 +686,9 @@ class AppHandler(SimpleHTTPRequestHandler):
         if path.startswith("/espace-apprenant/sequence-"):
             parts = path.rstrip("/").split("/")
             slug = parts[-2] if parts[-1] == "demarrer" else parts[-1]
-            sequence = sequence_by_slug(slug)
+            sequence = sequence_by_slug(slug) or (
+                SUPPORT_METHODOLOGY if slug == SUPPORT_METHODOLOGY["slug"] else None
+            )
             if sequence:
                 return self.handle_sequence_submission(data, sequence)
         self.send_error(404)
