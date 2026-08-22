@@ -56,7 +56,7 @@ def request(port: int, method: str, path: str, body: bytes | None = None, header
 def runtime_checks() -> None:
     port = free_port()
     env = os.environ.copy()
-    env.update({"HOST": "127.0.0.1", "PORT": str(port), "APP_ENV": "production", "COMPAGNON_FLE_DB": str(ROOT / "security_check.sqlite3")})
+    env.update({"HOST": "127.0.0.1", "PORT": str(port), "RENDER": "true", "COMPAGNON_FLE_DB": str(ROOT / "security_check.sqlite3")})
     process = subprocess.Popen([sys.executable, str(SERVER)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         for _ in range(50):
