@@ -64,10 +64,14 @@ MAX_REGISTRATIONS_PER_IP = 10
 MAX_POST_BODY_BYTES = int(os.environ.get("MAX_POST_BODY_BYTES", "20000"))
 MAX_ACTIVE_SESSIONS = int(os.environ.get("MAX_ACTIVE_SESSIONS", "2000"))
 COMMON_LEARNER_PASSWORD = os.environ.get("COMMON_LEARNER_PASSWORD", "Compagnon2026")
-PRODUCTION = os.environ.get("APP_ENV", "development").lower() == "production"
+RUNNING_ON_RENDER = os.environ.get("RENDER", "").lower() == "true"
+PRODUCTION = (
+    os.environ.get("APP_ENV", "development").lower() == "production"
+    or RUNNING_ON_RENDER
+)
 SECURE_COOKIES = os.environ.get(
     "SECURE_COOKIES", "true" if PRODUCTION else "false"
-).lower() == "true"
+).lower() == "true" or RUNNING_ON_RENDER
 
 SUPPORT_SEQUENCES = {
     SUPPORT_METHODOLOGY["slug"]: SUPPORT_METHODOLOGY,
