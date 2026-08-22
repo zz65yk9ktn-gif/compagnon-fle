@@ -570,7 +570,11 @@ class AppHandler(SimpleHTTPRequestHandler):
         if path == "/health":
             return self.send_html("OK")
         if path == "/":
-            return super().do_GET() if (BASE_DIR / "index.html").exists() else self.send_error(404)
+            try:
+                document = (BASE_DIR / "index.html").read_text(encoding="utf-8")
+            except OSError:
+                return self.send_error(404)
+            return self.send_html(document)
         if path == "/tableau-de-bord":
             session = self.current_session()
             return self.redirect(dashboard_path_for_role(session["role"])) if session else self.redirect("/connexion")
