@@ -73,6 +73,12 @@ def runtime_checks() -> None:
         require(headers.get("X-Frame-Options") == "DENY", "Protection anti-frame absente")
         require("object-src 'none'" in headers.get("Content-Security-Policy", ""), "CSP insuffisante")
 
+        status, home_headers, _ = request(port, "GET", "/")
+        require(status == 200, "Accueil indisponible")
+        require(home_headers.get("Strict-Transport-Security"), "HSTS absent de l’accueil")
+        require(home_headers.get("X-Frame-Options") == "DENY", "Protection anti-frame absente de l’accueil")
+        require(home_headers.get("Cache-Control") == "no-store", "Cache privé absent de l’accueil")
+
         status, _, _ = request(port, "POST", "/connexion/apprenant", body=b"{}", headers={"Content-Type": "application/json", "Content-Length": "2"})
         require(status == 400, f"Le JSON inattendu doit être refusé, statut reçu : {status}")
 
